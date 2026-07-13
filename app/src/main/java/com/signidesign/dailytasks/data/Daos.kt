@@ -11,11 +11,8 @@ import java.time.LocalDate
 
 @Dao
 interface TaskDao {
-    // Timed tasks in chronological order first, then untimed in creation order.
-    @Query(
-        """SELECT * FROM tasks WHERE dayDate = :date
-           ORDER BY CASE WHEN startTime IS NULL THEN 1 ELSE 0 END, startTime ASC, createdAt ASC"""
-    )
+    // Manual order first (drag to reorder), creation order as tiebreaker.
+    @Query("SELECT * FROM tasks WHERE dayDate = :date ORDER BY sortOrder ASC, createdAt ASC")
     fun tasksForDay(date: LocalDate): Flow<List<TaskEntity>>
 
     @Query(
@@ -32,11 +29,23 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE id = :id")
     suspend fun taskById(id: Long): TaskEntity?
 
-    @Query("SELECT * FROM tasks WHERE dayDate = :date ORDER BY CASE WHEN startTime IS NULL THEN 1 ELSE 0 END, startTime ASC, createdAt ASC")
+    @Query("SELECT * FROM tasks WHERE dayDate = :date ORDER BY sortOrder ASC, createdAt ASC")
     suspend fun tasksForDayOnce(date: LocalDate): List<TaskEntity>
 
     @Query("SELECT * FROM tasks WHERE isTimed != 0 AND isDone = 0 AND dayDate >= :from")
     suspend fun upcomingTimedTasks(from: LocalDate): List<TaskEntity>
+
+    @Query("SELECT COALESCE(MAX(sortOrder), 0) FROM tasks WHERE dayDate = :date")
+    suspend fun maxSortOrder(date: LocalDate): Long
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE dayDate < :before AND isDone = 0")
+    fun pastUnfinishedCount(before: LocalDate): Flow<Int>
+
+    @Query("SELECT * FROM tasks WHERE dayDate < :before AND isDone = 0 ORDER BY dayDate ASC, sortOrder ASC")
+    suspend fun pastUnfinished(before: LocalDate): List<TaskEntity>
+
+    @Query("UPDATE tasks SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun updateSortOrder(id: Long, sortOrder: Long)
 
     @Insert
     suspend fun insert(task: TaskEntity): Long

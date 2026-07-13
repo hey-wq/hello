@@ -24,9 +24,17 @@ class TaskRepository(
     suspend fun upcomingTimedTasks(from: LocalDate): List<TaskEntity> =
         taskDao.upcomingTimedTasks(from)
 
+    fun pastUnfinishedCount(before: LocalDate): Flow<Int> =
+        taskDao.pastUnfinishedCount(before)
+
     suspend fun addTask(title: String, date: LocalDate) {
         taskDao.insert(
-            TaskEntity(title = title.trim(), dayDate = date, createdAt = Instant.now())
+            TaskEntity(
+                title = title.trim(),
+                dayDate = date,
+                createdAt = Instant.now(),
+                sortOrder = taskDao.maxSortOrder(date) + 1
+            )
         )
     }
 
@@ -49,6 +57,29 @@ class TaskRepository(
         )
 
     suspend fun delete(task: TaskEntity) = taskDao.delete(task)
+
+    suspend fun moveTask(task: TaskEntity, newDate: LocalDate) {
+        taskDao.update(
+            task.copy(dayDate = newDate, sortOrder = taskDao.maxSortOrder(newDate) + 1)
+        )
+    }
+
+    /** Move every unfinished task from days before [date] onto [date]. */
+    suspend fun rolloverPastTo(date: LocalDate): List<TaskEntity> {
+        val past = taskDao.pastUnfinished(date)
+        var next = taskDao.maxSortOrder(date)
+        past.forEach { task ->
+            next += 1
+            taskDao.update(task.copy(dayDate = date, sortOrder = next))
+        }
+        return past
+    }
+
+    suspend fun reorder(orderedIds: List<Long>) {
+        orderedIds.forEachIndexed { index, id ->
+            taskDao.updateSortOrder(id, index.toLong())
+        }
+    }
 
     suspend fun saveDayNote(date: LocalDate, content: String) {
         if (content.isBlank()) dayNoteDao.delete(date)

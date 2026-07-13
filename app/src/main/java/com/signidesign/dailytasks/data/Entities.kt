@@ -1,5 +1,6 @@
 package com.signidesign.dailytasks.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -18,7 +19,9 @@ data class TaskEntity(
     val isTimed: Boolean = false,
     val startTime: LocalTime? = null,
     val durationMinutes: Int? = null,
-    val note: String? = null
+    val note: String? = null,
+    // Manual list position within a day; assigned as max+1 on insert/move.
+    @ColumnInfo(defaultValue = "0") val sortOrder: Long = 0
 )
 
 @Entity(tableName = "day_notes")

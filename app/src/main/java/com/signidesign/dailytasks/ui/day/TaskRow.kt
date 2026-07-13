@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -79,6 +80,7 @@ fun TaskRow(
     onSetDone: (Boolean) -> Unit,
     onSetNote: (String) -> Unit,
     onSetSchedule: (LocalTime?, Int?) -> Unit,
+    onMoveToTomorrow: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -150,6 +152,7 @@ fun TaskRow(
                     task = task,
                     onSetNote = onSetNote,
                     onSetSchedule = onSetSchedule,
+                    onMoveToTomorrow = onMoveToTomorrow,
                     onDelete = onDelete
                 )
             }
@@ -224,6 +227,7 @@ private fun ExpandedContent(
     task: TaskEntity,
     onSetNote: (String) -> Unit,
     onSetSchedule: (LocalTime?, Int?) -> Unit,
+    onMoveToTomorrow: () -> Unit,
     onDelete: () -> Unit
 ) {
     val accent = AppTheme.accent
@@ -329,6 +333,16 @@ private fun ExpandedContent(
 
         Spacer(Modifier.height(Dimens.innerGap))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onMoveToTomorrow) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Tomorrow", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             TextButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,

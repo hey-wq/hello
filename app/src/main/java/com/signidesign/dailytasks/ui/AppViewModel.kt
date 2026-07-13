@@ -66,6 +66,23 @@ class AppViewModel(
         reminders.cancelTask(task.id)
     }
 
+    fun pastUnfinishedCount(before: LocalDate): Flow<Int> =
+        tasks.pastUnfinishedCount(before)
+
+    fun rolloverTo(date: LocalDate) = viewModelScope.launch {
+        val moved = tasks.rolloverPastTo(date)
+        moved.filter { it.isTimed }.forEach { reminders.resyncTask(it.id) }
+    }
+
+    fun moveToTomorrow(task: TaskEntity) = viewModelScope.launch {
+        tasks.moveTask(task, task.dayDate.plusDays(1))
+        if (task.isTimed) reminders.resyncTask(task.id)
+    }
+
+    fun reorder(orderedIds: List<Long>) = viewModelScope.launch {
+        tasks.reorder(orderedIds)
+    }
+
     fun saveDayNote(date: LocalDate, content: String) =
         viewModelScope.launch { tasks.saveDayNote(date, content) }
 
