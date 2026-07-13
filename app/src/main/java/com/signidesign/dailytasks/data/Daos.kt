@@ -29,6 +29,15 @@ interface TaskDao {
     )
     fun daySummaries(start: LocalDate, end: LocalDate): Flow<List<DaySummary>>
 
+    @Query("SELECT * FROM tasks WHERE id = :id")
+    suspend fun taskById(id: Long): TaskEntity?
+
+    @Query("SELECT * FROM tasks WHERE dayDate = :date ORDER BY CASE WHEN startTime IS NULL THEN 1 ELSE 0 END, startTime ASC, createdAt ASC")
+    suspend fun tasksForDayOnce(date: LocalDate): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks WHERE isTimed != 0 AND isDone = 0 AND dayDate >= :from")
+    suspend fun upcomingTimedTasks(from: LocalDate): List<TaskEntity>
+
     @Insert
     suspend fun insert(task: TaskEntity): Long
 

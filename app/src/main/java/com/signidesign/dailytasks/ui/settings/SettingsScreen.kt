@@ -19,6 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +39,8 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
+    val remindersEnabled by viewModel.remindersEnabled.collectAsStateWithLifecycle(true)
+    val digestEnabled by viewModel.digestEnabled.collectAsStateWithLifecycle(true)
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -93,6 +97,72 @@ fun SettingsScreen(
                     onSelect = { viewModel.setThemeMode(ThemeMode.DARK) }
                 )
             }
+
+            Spacer(Modifier.height(Dimens.sectionGap))
+            Text(
+                text = "NOTIFICATIONS",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(Dimens.itemGap))
+
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.itemGap)) {
+                ToggleOption(
+                    label = "Task reminders",
+                    description = "An hour before and at the start of scheduled tasks",
+                    checked = remindersEnabled,
+                    onToggle = { viewModel.setRemindersEnabled(it) }
+                )
+                ToggleOption(
+                    label = "Morning digest",
+                    description = "A summary of the day at 8:00",
+                    checked = digestEnabled,
+                    onToggle = { viewModel.setDigestEnabled(it) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleOption(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val accent = AppTheme.accent
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(Dimens.cardPadding)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(Dimens.innerGap))
+            Switch(
+                checked = checked,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedTrackColor = accent.accent,
+                    checkedThumbColor = accent.onAccent
+                )
+            )
         }
     }
 }

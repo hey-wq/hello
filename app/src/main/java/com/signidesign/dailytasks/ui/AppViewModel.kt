@@ -8,9 +8,10 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.signidesign.dailytasks.TaskApp
 import com.signidesign.dailytasks.data.DayNoteEntity
 import com.signidesign.dailytasks.data.DaySummary
+import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskEntity
 import com.signidesign.dailytasks.data.TaskRepository
-import com.signidesign.dailytasks.data.ThemeRepository
+import com.signidesign.dailytasks.notifications.ReminderManager
 import com.signidesign.dailytasks.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -26,10 +27,13 @@ import java.time.YearMonth
  */
 class AppViewModel(
     private val tasks: TaskRepository,
-    private val theme: ThemeRepository
+    private val settings: SettingsRepository,
+    private val reminders: ReminderManager
 ) : ViewModel() {
 
-    val themeMode: Flow<ThemeMode> = theme.themeMode
+    val themeMode: Flow<ThemeMode> = settings.themeMode
+    val remindersEnabled: Flow<Boolean> = settings.remindersEnabled
+    val digestEnabled: Flow<Boolean> = settings.digestEnabled
 
     fun tasksFor(date: LocalDate): Flow<List<TaskEntity>> = tasks.tasksForDay(date)
 
@@ -43,23 +47,40 @@ class AppViewModel(
         viewModelScope.launch { tasks.addTask(title, date) }
     }
 
-    fun setDone(task: TaskEntity, done: Boolean) =
-        viewModelScope.launch { tasks.setDone(task, done) }
+    fun setDone(task: TaskEntity, done: Boolean) = viewModelScope.launch {
+        tasks.setDone(task, done)
+        reminders.resyncTask(task.id)
+    }
 
     fun setNote(task: TaskEntity, note: String) =
         viewModelScope.launch { tasks.setNote(task, note) }
 
     fun setSchedule(task: TaskEntity, start: LocalTime?, durationMinutes: Int?) =
-        viewModelScope.launch { tasks.setSchedule(task, start, durationMinutes) }
+        viewModelScope.launch {
+            tasks.setSchedule(task, start, durationMinutes)
+            reminders.resyncTask(task.id)
+        }
 
-    fun deleteTask(task: TaskEntity) =
-        viewModelScope.launch { tasks.delete(task) }
+    fun deleteTask(task: TaskEntity) = viewModelScope.launch {
+        tasks.delete(task)
+        reminders.cancelTask(task.id)
+    }
 
     fun saveDayNote(date: LocalDate, content: String) =
         viewModelScope.launch { tasks.saveDayNote(date, content) }
 
     fun setThemeMode(mode: ThemeMode) =
-        viewModelScope.launch { theme.setThemeMode(mode) }
+        viewModelScope.launch { settings.setThemeMode(mode) }
+
+    fun setRemindersEnabled(enabled: Boolean) = viewModelScope.launch {
+        settings.setRemindersEnabled(enabled)
+        if (enabled) reminders.resyncAll()
+    }
+
+    fun setDigestEnabled(enabled: Boolean) = viewModelScope.launch {
+        settings.setDigestEnabled(enabled)
+        if (enabled) reminders.scheduleNextDigest() else reminders.cancelDigest()
+    }
 
     companion object {
         val Factory = object : ViewModelProvider.Factory {
@@ -68,7 +89,8 @@ class AppViewModel(
                 val app = extras[APPLICATION_KEY] as TaskApp
                 return AppViewModel(
                     app.container.taskRepository,
-                    app.container.themeRepository
+                    app.container.settingsRepository,
+                    app.container.reminderManager
                 ) as T
             }
         }

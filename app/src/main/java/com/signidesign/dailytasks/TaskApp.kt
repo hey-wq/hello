@@ -3,8 +3,13 @@ package com.signidesign.dailytasks
 import android.app.Application
 import android.content.Context
 import com.signidesign.dailytasks.data.AppDatabase
+import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskRepository
-import com.signidesign.dailytasks.data.ThemeRepository
+import com.signidesign.dailytasks.notifications.ReminderManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Manual DI container — deliberately no Hilt/Koin for an app this size.
@@ -14,15 +19,24 @@ import com.signidesign.dailytasks.data.ThemeRepository
 class AppContainer(context: Context) {
     private val database = AppDatabase.get(context)
     val taskRepository = TaskRepository(database.taskDao(), database.dayNoteDao())
-    val themeRepository = ThemeRepository(context)
+    val settingsRepository = SettingsRepository(context)
+    val reminderManager = ReminderManager(context, taskRepository, settingsRepository)
 }
 
 class TaskApp : Application() {
     lateinit var container: AppContainer
         private set
 
+    /** Outlives any screen; used by receivers and fire-and-forget scheduling. */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.reminderManager.ensureChannels()
+        applicationScope.launch {
+            container.reminderManager.resyncAll()
+            container.reminderManager.scheduleNextDigest()
+        }
     }
 }

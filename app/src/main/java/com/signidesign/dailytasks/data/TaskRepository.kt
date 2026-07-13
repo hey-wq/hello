@@ -16,6 +16,14 @@ class TaskRepository(
 
     fun dayNote(date: LocalDate): Flow<DayNoteEntity?> = dayNoteDao.noteForDay(date)
 
+    suspend fun taskById(id: Long): TaskEntity? = taskDao.taskById(id)
+
+    suspend fun tasksForDayOnce(date: LocalDate): List<TaskEntity> =
+        taskDao.tasksForDayOnce(date)
+
+    suspend fun upcomingTimedTasks(from: LocalDate): List<TaskEntity> =
+        taskDao.upcomingTimedTasks(from)
+
     suspend fun addTask(title: String, date: LocalDate) {
         taskDao.insert(
             TaskEntity(title = title.trim(), dayDate = date, createdAt = Instant.now())

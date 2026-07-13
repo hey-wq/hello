@@ -22,7 +22,7 @@ object Routes {
 }
 
 @Composable
-fun AppNavHost(viewModel: AppViewModel) {
+fun AppNavHost(viewModel: AppViewModel, initialDate: LocalDate = LocalDate.now()) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = Routes.DAY) {
@@ -36,11 +36,11 @@ fun AppNavHost(viewModel: AppViewModel) {
             )
         ) { backStackEntry ->
             val epochDay = backStackEntry.arguments?.getLong("epochDay") ?: -1L
-            val initialDate =
-                if (epochDay >= 0) LocalDate.ofEpochDay(epochDay) else LocalDate.now()
+            val pageDate =
+                if (epochDay >= 0) LocalDate.ofEpochDay(epochDay) else initialDate
             DayScreen(
                 viewModel = viewModel,
-                initialDate = initialDate,
+                initialDate = pageDate,
                 onOpenCalendar = { navController.navigate(Routes.CALENDAR) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) }
             )
