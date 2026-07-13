@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,3 +30,17 @@ jobs:
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # Keep a public, stable download link for sideloading:
+      # https://github.com/hey-wq/hello/releases/download/debug-latest/daily-tasks-debug.apk
+      - name: Publish debug APK to debug-latest release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk daily-tasks-debug.apk
+          gh release view debug-latest >/dev/null 2>&1 || \
+            gh release create debug-latest --prerelease \
+              --title "Daily — debug build (latest)" \
+              --notes "Auto-built debug APK from the latest push."
+          gh release upload debug-latest daily-tasks-debug.apk --clobber
