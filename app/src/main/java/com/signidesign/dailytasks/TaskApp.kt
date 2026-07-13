@@ -6,6 +6,7 @@ import com.signidesign.dailytasks.data.AppDatabase
 import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskRepository
 import com.signidesign.dailytasks.notifications.ReminderManager
+import com.signidesign.dailytasks.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +22,7 @@ class AppContainer(context: Context) {
     val taskRepository = TaskRepository(database.taskDao(), database.dayNoteDao())
     val settingsRepository = SettingsRepository(context)
     val reminderManager = ReminderManager(context, taskRepository, settingsRepository)
+    val syncEngine = SyncEngine(taskRepository, settingsRepository)
 }
 
 class TaskApp : Application() {
@@ -35,6 +37,9 @@ class TaskApp : Application() {
         container = AppContainer(this)
         container.reminderManager.ensureChannels()
         applicationScope.launch {
+            // Pull remote changes first so alarms are armed against the
+            // merged state; sync() no-ops when URL/token are unset.
+            container.syncEngine.sync()
             container.reminderManager.resyncAll()
             container.reminderManager.scheduleNextDigest()
         }

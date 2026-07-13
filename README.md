@@ -38,6 +38,25 @@ Jetpack Compose, Material 3, Room.
   Material `primary` so stock components pick it up. New semantic colors are
   added as palette slots — no screen rework.
 
+## Google Sheets sync
+
+Optional two-way sync with a Google Sheet as the backend — free, no
+servers, no Google Cloud project. Setup:
+
+1. Create a Google Sheet (sheets.new).
+2. Extensions → Apps Script → paste `googlesheets/Code.gs`, change the
+   `TOKEN` constant to a long random string, save.
+3. Deploy → New deployment → Web app → Execute as **Me**, access
+   **Anyone** → Deploy → copy the `/exec` URL.
+4. In the app: Settings → *Google Sheets sync* → paste URL + token →
+   **Save & sync**.
+
+Tasks and day notes sync both ways with last-write-wins on `updatedAt`;
+deletions propagate via tombstones. Editing rows in the sheet (title,
+done, note, times) syncs back to the phone — an `onEdit` trigger stamps
+`updatedAt`. The app syncs on launch and on demand. Multiple devices can
+point at the same sheet.
+
 ## Building
 
 ```

@@ -3,6 +3,7 @@ package com.signidesign.dailytasks.data
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import androidx.room.Upsert
@@ -44,8 +45,22 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE dayDate < :before AND isDone = 0 ORDER BY dayDate ASC, sortOrder ASC")
     suspend fun pastUnfinished(before: LocalDate): List<TaskEntity>
 
-    @Query("UPDATE tasks SET sortOrder = :sortOrder WHERE id = :id")
-    suspend fun updateSortOrder(id: Long, sortOrder: Long)
+    @Query("UPDATE tasks SET sortOrder = :sortOrder, updatedAt = :now WHERE id = :id")
+    suspend fun updateSortOrder(id: Long, sortOrder: Long, now: Long)
+
+    // ------------------------------------------------------------------ sync
+
+    @Query("SELECT * FROM tasks WHERE updatedAt > :since")
+    suspend fun updatedSince(since: Long): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks WHERE uuid = :uuid LIMIT 1")
+    suspend fun taskByUuid(uuid: String): TaskEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTombstone(tombstone: DeletedTaskEntity)
+
+    @Query("SELECT * FROM deleted_tasks WHERE deletedAt > :since")
+    suspend fun tombstonesSince(since: Long): List<DeletedTaskEntity>
 
     @Insert
     suspend fun insert(task: TaskEntity): Long
@@ -62,9 +77,12 @@ interface DayNoteDao {
     @Query("SELECT * FROM day_notes WHERE dayDate = :date")
     fun noteForDay(date: LocalDate): Flow<DayNoteEntity?>
 
+    @Query("SELECT * FROM day_notes WHERE dayDate = :date LIMIT 1")
+    suspend fun noteOnce(date: LocalDate): DayNoteEntity?
+
+    @Query("SELECT * FROM day_notes WHERE updatedAt > :since")
+    suspend fun updatedSince(since: Long): List<DayNoteEntity>
+
     @Upsert
     suspend fun upsert(note: DayNoteEntity)
-
-    @Query("DELETE FROM day_notes WHERE dayDate = :date")
-    suspend fun delete(date: LocalDate)
 }

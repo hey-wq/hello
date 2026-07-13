@@ -12,8 +12,11 @@ import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskEntity
 import com.signidesign.dailytasks.data.TaskRepository
 import com.signidesign.dailytasks.notifications.ReminderManager
+import com.signidesign.dailytasks.sync.SyncEngine
 import com.signidesign.dailytasks.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
@@ -28,12 +31,19 @@ import java.time.YearMonth
 class AppViewModel(
     private val tasks: TaskRepository,
     private val settings: SettingsRepository,
-    private val reminders: ReminderManager
+    private val reminders: ReminderManager,
+    private val syncEngine: SyncEngine
 ) : ViewModel() {
 
     val themeMode: Flow<ThemeMode> = settings.themeMode
     val remindersEnabled: Flow<Boolean> = settings.remindersEnabled
     val digestEnabled: Flow<Boolean> = settings.digestEnabled
+    val syncUrl: Flow<String> = settings.syncUrl
+    val syncToken: Flow<String> = settings.syncToken
+    val lastSyncAt: Flow<Long> = settings.lastSyncAt
+
+    private val _syncStatus = MutableStateFlow<String?>(null)
+    val syncStatus: StateFlow<String?> = _syncStatus
 
     fun tasksFor(date: LocalDate): Flow<List<TaskEntity>> = tasks.tasksForDay(date)
 
@@ -99,6 +109,27 @@ class AppViewModel(
         if (enabled) reminders.scheduleNextDigest() else reminders.cancelDigest()
     }
 
+    fun saveSyncConfigAndSync(url: String, token: String) = viewModelScope.launch {
+        settings.setSyncConfig(url, token)
+        runSync()
+    }
+
+    fun syncNow() = viewModelScope.launch { runSync() }
+
+    private suspend fun runSync() {
+        _syncStatus.value = "Syncing…"
+        when (val result = syncEngine.sync()) {
+            is SyncEngine.SyncResult.Success -> {
+                _syncStatus.value = "Synced — sent ${result.pushed}, received ${result.pulled}"
+                reminders.resyncAll()
+            }
+            is SyncEngine.SyncResult.Error ->
+                _syncStatus.value = "Sync failed: ${result.message}"
+            SyncEngine.SyncResult.NotConfigured ->
+                _syncStatus.value = "Enter the web app URL and token first"
+        }
+    }
+
     companion object {
         val Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -107,7 +138,8 @@ class AppViewModel(
                 return AppViewModel(
                     app.container.taskRepository,
                     app.container.settingsRepository,
-                    app.container.reminderManager
+                    app.container.reminderManager,
+                    app.container.syncEngine
                 ) as T
             }
         }
