@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -52,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
@@ -78,6 +80,7 @@ fun TaskRow(
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onSetDone: (Boolean) -> Unit,
+    onSetTitle: (String) -> Unit,
     onSetNote: (String) -> Unit,
     onSetSchedule: (LocalTime?, Int?) -> Unit,
     onMoveToTomorrow: () -> Unit,
@@ -120,13 +123,17 @@ fun TaskRow(
                 )
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = task.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
-                        color = if (task.isDone) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.onSurface
-                    )
+                    if (expanded) {
+                        TitleEditor(task = task, onSetTitle = onSetTitle)
+                    } else {
+                        Text(
+                            text = task.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
+                            color = if (task.isDone) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     if (!task.note.isNullOrBlank() && !expanded) {
                         Spacer(Modifier.height(2.dp))
                         Text(
@@ -158,6 +165,34 @@ fun TaskRow(
             }
         }
     }
+}
+
+/**
+ * Borderless in-place title editor shown while the row is expanded; styled
+ * to match the collapsed title exactly, with debounced autosave.
+ */
+@Composable
+private fun TitleEditor(task: TaskEntity, onSetTitle: (String) -> Unit) {
+    val accent = AppTheme.accent
+    var draft by remember(task.id) { mutableStateOf<String?>(null) }
+    val text = draft ?: task.title
+
+    LaunchedEffect(draft, task.id) {
+        val pending = draft?.trim() ?: return@LaunchedEffect
+        delay(500)
+        if (pending.isNotEmpty() && pending != task.title) onSetTitle(pending)
+    }
+
+    BasicTextField(
+        value = text,
+        onValueChange = { draft = it.replace("\n", "") },
+        modifier = Modifier.fillMaxWidth(),
+        textStyle = MaterialTheme.typography.titleMedium.copy(
+            color = MaterialTheme.colorScheme.onSurface
+        ),
+        cursorBrush = SolidColor(accent.accent),
+        singleLine = true
+    )
 }
 
 @Composable

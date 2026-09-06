@@ -65,6 +65,11 @@ class AppViewModel(
     fun setNote(task: TaskEntity, note: String) =
         viewModelScope.launch { tasks.setNote(task, note) }
 
+    fun setTitle(task: TaskEntity, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch { tasks.setTitle(task, title.trim()) }
+    }
+
     fun setSchedule(task: TaskEntity, start: LocalTime?, durationMinutes: Int?) =
         viewModelScope.launch {
             tasks.setSchedule(task, start, durationMinutes)

@@ -282,6 +282,7 @@ private fun DayPage(
                             expandedTaskId = if (expandedTaskId == task.id) null else task.id
                         },
                         onSetDone = { done -> viewModel.setDone(task, done) },
+                        onSetTitle = { title -> viewModel.setTitle(task, title) },
                         onSetNote = { note -> viewModel.setNote(task, note) },
                         onSetSchedule = { start, duration ->
                             viewModel.setSchedule(task, start, duration)
