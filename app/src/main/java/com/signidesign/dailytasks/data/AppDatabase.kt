@@ -13,9 +13,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TaskEntity::class,
         DayNoteEntity::class,
         DeletedTaskEntity::class,
-        BabyEventEntity::class
+        BabyEventEntity::class,
+        DeletedBabyEventEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -90,13 +91,34 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v5: baby events join the sheet sync, so their deletions need
+        // tombstones the same way tasks' do.
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `deleted_baby_events` (
+                       `uuid` TEXT NOT NULL, `deletedAt` INTEGER NOT NULL,
+                       PRIMARY KEY(`uuid`))"""
+                )
+                // Rows written before v5 carry the column default; give them
+                // real identities so they can be matched across devices.
+                db.execSQL(
+                    "UPDATE baby_events SET uuid = lower(hex(randomblob(16))) " +
+                        "WHERE uuid IS NULL OR uuid = ''"
+                )
+                db.execSQL("UPDATE baby_events SET updatedAt = startAt WHERE updatedAt = 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "daily-tasks.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5
+                )
                     .build().also { instance = it }
             }
     }

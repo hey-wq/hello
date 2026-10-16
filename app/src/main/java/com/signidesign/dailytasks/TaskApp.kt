@@ -24,7 +24,7 @@ class AppContainer(context: Context) {
     val babyRepository = BabyRepository(database.babyDao())
     val settingsRepository = SettingsRepository(context)
     val reminderManager = ReminderManager(context, taskRepository, settingsRepository)
-    val syncEngine = SyncEngine(taskRepository, settingsRepository)
+    val syncEngine = SyncEngine(taskRepository, settingsRepository, babyRepository)
 }
 
 class TaskApp : Application() {

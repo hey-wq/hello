@@ -213,10 +213,8 @@ Chaining works across both domains: *"wet nappy, then she's asleep."*
 
 ### Not in this pass
 
-Baby data does **not** go through the Google Sheets sync yet — that needs
-matching sheets and Apps Script changes, so it stays task-only for now, and
-baby events live on the device. Feed-due reminders and growth (weight,
-length, head circumference) are also deliberately out.
+Feed-due reminders and growth (weight, length, head circumference) are
+deliberately out. Baby events **do** sync — see below.
 
 ## Google Sheets sync
 
@@ -231,11 +229,61 @@ servers, no Google Cloud project. Setup:
 4. In the app: Settings → *Google Sheets sync* → paste URL + token →
    **Save & sync**.
 
-Tasks and day notes sync both ways with last-write-wins on `updatedAt`;
-deletions propagate via tombstones. Editing rows in the sheet (title,
+Tasks, day notes and baby events sync both ways with last-write-wins on
+`updatedAt`; deletions propagate via tombstones. Editing rows in the sheet (title,
 done, note, times) syncs back to the phone — an `onEdit` trigger stamps
 `updatedAt`. The app syncs on launch and on demand. Multiple devices can
-point at the same sheet.
+point at the same sheet — which is the point for a baby log, when two
+people are splitting the night.
+
+### Baby rows in the sheet
+
+The **Baby** tab carries one row per logged moment:
+`uuid, kind, startAt, endAt, amountMl, note, babyId, durationMin, updatedAt,
+deleted`.
+
+- **Timestamps are absolute.** A task is wall clock ("3pm on Friday"), but a
+  feed is a moment, and every total depends on it — so baby rows carry full
+  ISO-8601 with an offset, `2026-10-16T14:20:00+01:00`. Two phones in
+  different time zones therefore agree on what happened when.
+- **Those columns are forced to plain text**, so Sheets cannot quietly
+  reinterpret them as its own date values and hand back something the app
+  has to guess at.
+- **Hand-editing works.** An offset timestamp, a `Z` timestamp, a bare
+  `2026-10-16 14:20` (read in your zone), a date alone (midnight), or raw
+  epoch millis all parse. Anything else is *dropped rather than guessed* —
+  a feed that didn't arrive beats a feed on the wrong day. That parsing
+  carries its own tests.
+- **An empty `endAt`** on a feed or sleep means it is still running.
+- **`durationMin` is derived** on every push and ignored on the way back.
+  Edit `startAt` / `endAt` instead; the column is there so you can chart it.
+
+## Installing on a phone
+
+Every push builds a debug APK and publishes it to the `debug-latest`
+release, so there is a stable link to sideload:
+
+**https://github.com/hey-wq/hello/releases/download/debug-latest/daily-tasks-debug.apk**
+
+1. Open that link in Chrome **on the phone**.
+2. Chrome will ask to be allowed to install apps (Android 8+ asks per app):
+   *Settings → Apps → Chrome → Install unknown apps → Allow*.
+3. Open the download and tap **Install**. Play Protect will warn about an
+   app from outside the Play Store — *More details → Install anyway*.
+4. On first run, allow **notifications** (reminders) and, the first time you
+   use voice, the **microphone**.
+5. Optional: *Settings → Voice → Choose the assistant app* to put Daily on
+   the home gesture, and add the *Daily voice* tile to your quick settings.
+
+Debug builds are signed with the committed `app/debug.keystore`, so a new
+APK installs straight over the previous one and keeps your data. That key is
+the conventional debug key with the conventional password — it holds nothing
+secret and cannot sign for Play. Without it, CI would mint a throwaway key
+per build and every update would be refused as a package conflict,
+forcing an uninstall that takes the database with it.
+
+Upgrades migrate the database in place (currently schema v5), so tasks and
+baby logs survive.
 
 ## Building
 

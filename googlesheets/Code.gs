@@ -12,19 +12,34 @@
  *  5. In the app: Settings → Google Sheets sync → paste the URL and the
  *     same token → Save & sync.
  *
- * The script creates two tabs on first sync: "Tasks" and "DayNotes".
- * You can edit rows in the sheet (title, done, note, times…) — an onEdit
- * trigger stamps updatedAt so your edits sync back to the phone. Don't
- * edit the uuid column.
+ * The script creates three tabs on first sync: "Tasks", "DayNotes" and
+ * "Baby". You can edit rows in the sheet (title, done, note, times…) — an
+ * onEdit trigger stamps updatedAt so your edits sync back to the phone.
+ * Don't edit the uuid column.
+ *
+ * Baby rows carry full ISO-8601 timestamps with an offset
+ * ("2026-10-16T14:20:00+01:00") because a feed is an absolute moment, not a
+ * wall-clock time like a task's. Those columns are forced to plain text so
+ * Sheets cannot quietly turn them into its own date values; if you edit one
+ * by hand, an offset, a "Z" time or a plain "2026-10-16 14:20" all parse.
+ * durationMin is derived on each push and ignored on the way back — edit
+ * startAt/endAt instead. An empty endAt on a feed or sleep means it is
+ * still running.
  */
 
 const TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
 
 const TASK_SHEET = 'Tasks';
 const NOTE_SHEET = 'DayNotes';
+const BABY_SHEET = 'Baby';
 const TASK_HEADERS = ['uuid', 'dayDate', 'title', 'done', 'timed', 'startTime',
   'durationMin', 'note', 'sortOrder', 'createdAt', 'createdBy', 'updatedAt', 'deleted'];
 const NOTE_HEADERS = ['dayDate', 'content', 'updatedAt'];
+const BABY_HEADERS = ['uuid', 'kind', 'startAt', 'endAt', 'amountMl', 'note',
+  'babyId', 'durationMin', 'updatedAt', 'deleted'];
+
+/** Columns Sheets must not reinterpret as its own dates. */
+const TEXT_COLUMNS = { 'Baby': ['uuid', 'startAt', 'endAt'] };
 
 function doGet() {
   return ContentService.createTextOutput('Daily sync endpoint is up.');
@@ -41,15 +56,18 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const tasks = getOrCreateSheet(ss, TASK_SHEET, TASK_HEADERS);
     const notes = getOrCreateSheet(ss, NOTE_SHEET, NOTE_HEADERS);
+    const baby = getOrCreateSheet(ss, BABY_SHEET, BABY_HEADERS);
     const since = Number(body.since || 0);
 
     upsert(tasks, TASK_HEADERS, body.tasks || [], 'uuid');
     upsert(notes, NOTE_HEADERS, body.dayNotes || [], 'dayDate');
+    upsert(baby, BABY_HEADERS, body.babyEvents || [], 'uuid');
 
     return json({
       serverTime: Date.now(),
       tasks: changedSince(tasks, TASK_HEADERS, since),
-      dayNotes: changedSince(notes, NOTE_HEADERS, since)
+      dayNotes: changedSince(notes, NOTE_HEADERS, since),
+      babyEvents: changedSince(baby, BABY_HEADERS, since)
     });
   } catch (err) {
     return json({ error: String(err) });
@@ -65,6 +83,7 @@ function onEdit(e) {
   let headers;
   if (name === TASK_SHEET) headers = TASK_HEADERS;
   else if (name === NOTE_SHEET) headers = NOTE_HEADERS;
+  else if (name === BABY_SHEET) headers = BABY_HEADERS;
   else return;
 
   const updCol = headers.indexOf('updatedAt') + 1;
@@ -89,7 +108,23 @@ function getOrCreateSheet(ss, name, headers) {
     sheet.appendRow(headers);
     sheet.setFrozenRows(1);
   }
+  applyTextColumns(sheet, name, headers);
   return sheet;
+}
+
+/**
+ * Force the timestamp and id columns to plain text. Without this, Sheets
+ * parses "2026-10-16T14:20:00+01:00" into a Date and hands back something
+ * the app has to guess at; as text it round-trips verbatim.
+ */
+function applyTextColumns(sheet, name, headers) {
+  const columns = TEXT_COLUMNS[name];
+  if (!columns) return;
+  const rows = Math.max(sheet.getMaxRows() - 1, 1);
+  columns.forEach(function (header) {
+    const col = headers.indexOf(header) + 1;
+    if (col > 0) sheet.getRange(2, col, rows, 1).setNumberFormat('@');
+  });
 }
 
 /** Last-write-wins upsert keyed by keyName. */
@@ -144,6 +179,12 @@ function normalize(value, header) {
   if (value instanceof Date) {
     const tz = Session.getScriptTimeZone();
     if (header === 'startTime') return Utilities.formatDate(value, tz, 'HH:mm');
+    // Baby timestamps are absolute moments. If a cell slipped through as a
+    // Date (an older sheet, or a paste that bypassed the text format), send
+    // it back with an explicit offset rather than a bare date.
+    if (header === 'startAt' || header === 'endAt') {
+      return Utilities.formatDate(value, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+    }
     return Utilities.formatDate(value, tz, 'yyyy-MM-dd');
   }
   return value;

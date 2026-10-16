@@ -74,3 +74,10 @@ data class BabyEventEntity(
     @ColumnInfo(defaultValue = "''") val uuid: String = UUID.randomUUID().toString(),
     @ColumnInfo(defaultValue = "0") val updatedAt: Long = 0
 )
+
+/** Tombstone so a deleted baby event propagates to the sheet and back. */
+@Entity(tableName = "deleted_baby_events")
+data class DeletedBabyEventEntity(
+    @PrimaryKey val uuid: String,
+    val deletedAt: Long
+)

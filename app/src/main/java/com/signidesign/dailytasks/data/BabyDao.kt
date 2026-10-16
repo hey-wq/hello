@@ -3,6 +3,7 @@ package com.signidesign.dailytasks.data
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -56,6 +57,20 @@ interface BabyDao {
 
     @Query("SELECT * FROM baby_events ORDER BY startAt DESC LIMIT :limit")
     suspend fun recent(limit: Int): List<BabyEventEntity>
+
+    // ------------------------------------------------------------------ sync
+
+    @Query("SELECT * FROM baby_events WHERE updatedAt > :since")
+    suspend fun updatedSince(since: Long): List<BabyEventEntity>
+
+    @Query("SELECT * FROM baby_events WHERE uuid = :uuid LIMIT 1")
+    suspend fun byUuid(uuid: String): BabyEventEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTombstone(tombstone: DeletedBabyEventEntity)
+
+    @Query("SELECT * FROM deleted_baby_events WHERE deletedAt > :since")
+    suspend fun tombstonesSince(since: Long): List<DeletedBabyEventEntity>
 
     @Insert
     suspend fun insert(event: BabyEventEntity): Long

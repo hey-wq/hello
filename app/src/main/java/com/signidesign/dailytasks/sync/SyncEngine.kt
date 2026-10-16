@@ -1,6 +1,10 @@
 package com.signidesign.dailytasks.sync
 
+import com.signidesign.dailytasks.data.BabyEventEntity
+import com.signidesign.dailytasks.data.BabyEventKind
+import com.signidesign.dailytasks.data.BabyRepository
 import com.signidesign.dailytasks.data.DayNoteEntity
+import com.signidesign.dailytasks.data.DeletedBabyEventEntity
 import com.signidesign.dailytasks.data.DeletedTaskEntity
 import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskEntity
@@ -17,6 +21,7 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,7 +33,9 @@ import java.util.concurrent.TimeUnit
  */
 class SyncEngine(
     private val repository: TaskRepository,
-    private val settings: SettingsRepository
+    private val settings: SettingsRepository,
+    private val baby: BabyRepository,
+    private val zone: ZoneId = ZoneId.systemDefault()
 ) {
     private val client = OkHttpClient.Builder()
         .callTimeout(45, TimeUnit.SECONDS)
@@ -50,6 +57,8 @@ class SyncEngine(
             val localTasks = repository.tasksUpdatedSince(since)
             val tombstones = repository.tombstonesSince(since)
             val localNotes = repository.notesUpdatedSince(since)
+            val localBaby = baby.updatedSince(since)
+            val babyTombstones = baby.tombstonesSince(since)
 
             val payload = JSONObject().apply {
                 put("token", token)
@@ -60,6 +69,10 @@ class SyncEngine(
                 })
                 put("dayNotes", JSONArray().also { arr ->
                     localNotes.forEach { arr.put(noteToJson(it)) }
+                })
+                put("babyEvents", JSONArray().also { arr ->
+                    localBaby.forEach { arr.put(babyToJson(it)) }
+                    babyTombstones.forEach { arr.put(babyTombstoneToJson(it)) }
                 })
             }
 
@@ -92,10 +105,15 @@ class SyncEngine(
             for (i in 0 until remoteNotes.length()) {
                 if (applyRemoteNote(remoteNotes.getJSONObject(i))) pulled++
             }
+            val remoteBaby = json.optJSONArray("babyEvents") ?: JSONArray()
+            for (i in 0 until remoteBaby.length()) {
+                if (applyRemoteBabyEvent(remoteBaby.getJSONObject(i))) pulled++
+            }
 
             settings.setLastSyncAt(json.optLong("serverTime", System.currentTimeMillis()))
             SyncResult.Success(
-                pushed = localTasks.size + tombstones.size + localNotes.size,
+                pushed = localTasks.size + tombstones.size + localNotes.size +
+                    localBaby.size + babyTombstones.size,
                 pulled = pulled
             )
         } catch (e: Exception) {
@@ -122,6 +140,33 @@ class SyncEngine(
     }
 
     private fun tombstoneToJson(tombstone: DeletedTaskEntity): JSONObject =
+        JSONObject().apply {
+            put("uuid", tombstone.uuid)
+            put("updatedAt", tombstone.deletedAt)
+            put("deleted", true)
+        }
+
+    private fun babyToJson(event: BabyEventEntity): JSONObject = JSONObject().apply {
+        put("uuid", event.uuid)
+        put("kind", event.kind.name)
+        put("startAt", SyncFormats.formatInstant(event.startAt, zone))
+        put("endAt", event.endAt?.let { SyncFormats.formatInstant(it, zone) } ?: "")
+        put("amountMl", event.amountMl ?: "")
+        put("note", event.note ?: "")
+        put("babyId", event.babyId)
+        // Derived for the sheet's benefit (so a column can be charted); it is
+        // recomputed on every push and ignored on the way back.
+        put(
+            "durationMin",
+            event.endAt?.let { end ->
+                java.time.Duration.between(event.startAt, end).toMinutes()
+            } ?: ""
+        )
+        put("updatedAt", event.updatedAt)
+        put("deleted", false)
+    }
+
+    private fun babyTombstoneToJson(tombstone: DeletedBabyEventEntity): JSONObject =
         JSONObject().apply {
             put("uuid", tombstone.uuid)
             put("updatedAt", tombstone.deletedAt)
@@ -190,6 +235,48 @@ class SyncEngine(
                 updatedAt = updatedAt
             )
         )
+        return true
+    }
+
+    private suspend fun applyRemoteBabyEvent(obj: JSONObject): Boolean {
+        val uuid = obj.optString("uuid")
+        if (uuid.isBlank()) return false
+        val updatedAt = obj.optLong("updatedAt")
+        val local = baby.byUuid(uuid)
+
+        if (parseBool(obj.opt("deleted"))) {
+            if (local != null && updatedAt > local.updatedAt) {
+                baby.deleteFromRemote(local)
+                return true
+            }
+            return false
+        }
+
+        if (local != null && local.updatedAt >= updatedAt) return false
+
+        // A row the app cannot interpret is dropped, not guessed at: a feed
+        // landing on the wrong day is worse than a feed that didn't arrive.
+        val kind = BabyEventKind.entries
+            .firstOrNull { it.name == obj.optString("kind").trim().uppercase() }
+            ?: return false
+        val startAt = SyncFormats.parseInstant(obj.optString("startAt"), zone) ?: return false
+        val endAt = SyncFormats.parseInstant(obj.optString("endAt"), zone)
+            ?.let { if (it.isBefore(startAt)) startAt else it }
+
+        val entity = BabyEventEntity(
+            id = local?.id ?: 0L,
+            uuid = uuid,
+            kind = kind,
+            startAt = startAt,
+            // An instant kind is its own end; only a timed kind may be open.
+            endAt = if (kind.timed) endAt else (endAt ?: startAt),
+            amountMl = obj.optDouble("amountMl", -1.0).toInt().takeIf { it >= 0 },
+            note = obj.optString("note").ifBlank { null },
+            babyId = obj.optLong("babyId"),
+            updatedAt = updatedAt
+        )
+        if (local == null) baby.insertFromRemote(entity)
+        else baby.updateFromRemote(entity)
         return true
     }
 

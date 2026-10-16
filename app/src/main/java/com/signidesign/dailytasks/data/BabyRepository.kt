@@ -146,11 +146,37 @@ class BabyRepository(private val dao: BabyDao) {
         dao.update(event.copy(startAt = safeStart, updatedAt = now()))
     }
 
-    suspend fun delete(event: BabyEventEntity) = dao.delete(event)
+    suspend fun delete(event: BabyEventEntity) {
+        dao.delete(event)
+        dao.insertTombstone(DeletedBabyEventEntity(uuid = event.uuid, deletedAt = now()))
+    }
 
     suspend fun deleteById(id: Long): BabyEventEntity? {
         val event = dao.byId(id) ?: return null
         dao.delete(event)
         return event
+    }
+
+    // ---------------------------------------------------------------- sync
+
+    suspend fun updatedSince(since: Long): List<BabyEventEntity> =
+        dao.updatedSince(since)
+
+    suspend fun tombstonesSince(since: Long): List<DeletedBabyEventEntity> =
+        dao.tombstonesSince(since)
+
+    suspend fun byUuid(uuid: String): BabyEventEntity? = dao.byUuid(uuid)
+
+    /** Sync-applied writes: no timestamp bump, no tombstone. */
+    suspend fun insertFromRemote(event: BabyEventEntity) {
+        dao.insert(event)
+    }
+
+    suspend fun updateFromRemote(event: BabyEventEntity) {
+        dao.update(event)
+    }
+
+    suspend fun deleteFromRemote(event: BabyEventEntity) {
+        dao.delete(event)
     }
 }

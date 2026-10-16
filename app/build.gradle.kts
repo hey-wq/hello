@@ -13,11 +13,29 @@ android {
         applicationId = "com.signidesign.dailytasks"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    // A committed debug key, so every CI build is signed identically and a
+    // new APK installs over the previous one instead of being refused as a
+    // package conflict. Uninstalling to get around that would take the
+    // database with it. There is no secret here: it is the conventional
+    // debug key, with the conventional "android" password, and it cannot
+    // sign anything for Play.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
