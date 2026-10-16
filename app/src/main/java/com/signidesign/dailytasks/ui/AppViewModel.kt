@@ -41,6 +41,10 @@ class AppViewModel(
     val syncUrl: Flow<String> = settings.syncUrl
     val syncToken: Flow<String> = settings.syncToken
     val lastSyncAt: Flow<Long> = settings.lastSyncAt
+    val voiceSpokenReplies: Flow<Boolean> = settings.voiceSpokenReplies
+    val voicePreferOffline: Flow<Boolean> = settings.voicePreferOffline
+    val voiceConfirmDeletions: Flow<Boolean> = settings.voiceConfirmDeletions
+    val voiceEarcons: Flow<Boolean> = settings.voiceEarcons
 
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus: StateFlow<String?> = _syncStatus
@@ -113,6 +117,18 @@ class AppViewModel(
         settings.setDigestEnabled(enabled)
         if (enabled) reminders.scheduleNextDigest() else reminders.cancelDigest()
     }
+
+    fun setVoiceSpokenReplies(enabled: Boolean) =
+        viewModelScope.launch { settings.setVoiceSpokenReplies(enabled) }
+
+    fun setVoicePreferOffline(enabled: Boolean) =
+        viewModelScope.launch { settings.setVoicePreferOffline(enabled) }
+
+    fun setVoiceConfirmDeletions(enabled: Boolean) =
+        viewModelScope.launch { settings.setVoiceConfirmDeletions(enabled) }
+
+    fun setVoiceEarcons(enabled: Boolean) =
+        viewModelScope.launch { settings.setVoiceEarcons(enabled) }
 
     fun saveSyncConfigAndSync(url: String, token: String) = viewModelScope.launch {
         settings.setSyncConfig(url, token)

@@ -20,8 +20,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.signidesign.dailytasks.notifications.ReminderManager
 import com.signidesign.dailytasks.ui.AppViewModel
 import com.signidesign.dailytasks.ui.navigation.AppNavHost
+import com.signidesign.dailytasks.ui.navigation.Routes
 import com.signidesign.dailytasks.ui.theme.DailyTasksTheme
 import com.signidesign.dailytasks.ui.theme.ThemeMode
+import com.signidesign.dailytasks.voice.VoiceAssistActivity
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
@@ -29,10 +31,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Notification taps carry the day they refer to.
-        val epochDayExtra = intent.getLongExtra(ReminderManager.EXTRA_EPOCH_DAY, -1L)
+        // Notification taps carry the day they refer to; a voice session
+        // hands off either a day or a destination route.
+        val epochDayExtra = listOf(
+            intent.getLongExtra(ReminderManager.EXTRA_EPOCH_DAY, -1L),
+            intent.getLongExtra(VoiceAssistActivity.EXTRA_EPOCH_DAY, -1L)
+        ).firstOrNull { it >= 0 } ?: -1L
         val initialDate =
             if (epochDayExtra >= 0) LocalDate.ofEpochDay(epochDayExtra) else LocalDate.now()
+        val initialRoute = when (intent.getStringExtra(VoiceAssistActivity.EXTRA_ROUTE)) {
+            VoiceAssistActivity.ROUTE_CALENDAR -> Routes.CALENDAR
+            VoiceAssistActivity.ROUTE_SETTINGS -> Routes.SETTINGS
+            else -> null
+        }
 
         setContent {
             val viewModel: AppViewModel = viewModel(factory = AppViewModel.Factory)
@@ -59,7 +70,11 @@ class MainActivity : ComponentActivity() {
             }
 
             DailyTasksTheme(themeMode = themeMode) {
-                AppNavHost(viewModel = viewModel, initialDate = initialDate)
+                AppNavHost(
+                    viewModel = viewModel,
+                    initialDate = initialDate,
+                    initialRoute = initialRoute
+                )
             }
         }
     }

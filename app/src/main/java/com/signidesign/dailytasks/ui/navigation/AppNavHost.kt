@@ -1,6 +1,7 @@
 package com.signidesign.dailytasks.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,9 +22,24 @@ object Routes {
         if (date == null) "day" else "day?epochDay=${date.toEpochDay()}"
 }
 
+/**
+ * @param initialRoute a destination to open on top of the day view, used
+ *   when a voice session says "open the calendar" and hands off to here.
+ */
 @Composable
-fun AppNavHost(viewModel: AppViewModel, initialDate: LocalDate = LocalDate.now()) {
+fun AppNavHost(
+    viewModel: AppViewModel,
+    initialDate: LocalDate = LocalDate.now(),
+    initialRoute: String? = null
+) {
     val navController = rememberNavController()
+
+    LaunchedEffect(initialRoute) {
+        when (initialRoute) {
+            Routes.CALENDAR -> navController.navigate(Routes.CALENDAR)
+            Routes.SETTINGS -> navController.navigate(Routes.SETTINGS)
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.DAY) {
         composable(

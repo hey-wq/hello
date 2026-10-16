@@ -26,6 +26,10 @@ class TaskRepository(
     suspend fun upcomingTimedTasks(from: LocalDate): List<TaskEntity> =
         taskDao.upcomingTimedTasks(from)
 
+    /** Voice commands resolve a spoken title against a window of days. */
+    suspend fun tasksInRange(start: LocalDate, end: LocalDate): List<TaskEntity> =
+        taskDao.tasksInRange(start, end)
+
     fun pastUnfinishedCount(before: LocalDate): Flow<Int> =
         taskDao.pastUnfinishedCount(before)
 
@@ -40,6 +44,29 @@ class TaskRepository(
             )
         )
     }
+
+    /**
+     * Insert with an optional schedule in one write, and hand back the row id
+     * so the caller can arm reminders. Voice adds arrive fully specified
+     * ("tomorrow at 3 for 45 minutes"), unlike the typed quick-add field.
+     */
+    suspend fun addTask(
+        title: String,
+        date: LocalDate,
+        start: LocalTime?,
+        durationMinutes: Int?
+    ): Long = taskDao.insert(
+        TaskEntity(
+            title = title.trim(),
+            dayDate = date,
+            createdAt = Instant.now(),
+            isTimed = start != null,
+            startTime = start,
+            durationMinutes = if (start != null) durationMinutes else null,
+            sortOrder = taskDao.maxSortOrder(date) + 1,
+            updatedAt = now()
+        )
+    )
 
     suspend fun setDone(task: TaskEntity, done: Boolean) =
         taskDao.update(task.copy(isDone = done, updatedAt = now()))

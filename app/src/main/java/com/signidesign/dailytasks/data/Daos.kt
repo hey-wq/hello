@@ -36,6 +36,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE isTimed != 0 AND isDone = 0 AND dayDate >= :from")
     suspend fun upcomingTimedTasks(from: LocalDate): List<TaskEntity>
 
+    @Query(
+        """SELECT * FROM tasks WHERE dayDate BETWEEN :start AND :end
+           ORDER BY dayDate ASC, sortOrder ASC, createdAt ASC"""
+    )
+    suspend fun tasksInRange(start: LocalDate, end: LocalDate): List<TaskEntity>
+
     @Query("SELECT COALESCE(MAX(sortOrder), 0) FROM tasks WHERE dayDate = :date")
     suspend fun maxSortOrder(date: LocalDate): Long
 

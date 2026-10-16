@@ -1,5 +1,10 @@
 package com.signidesign.dailytasks.ui.settings
 
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.signidesign.dailytasks.ui.AppViewModel
@@ -52,6 +59,11 @@ fun SettingsScreen(
     val storedToken by viewModel.syncToken.collectAsStateWithLifecycle("")
     val lastSyncAt by viewModel.lastSyncAt.collectAsStateWithLifecycle(0L)
     val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+    val spokenReplies by viewModel.voiceSpokenReplies.collectAsStateWithLifecycle(true)
+    val preferOffline by viewModel.voicePreferOffline.collectAsStateWithLifecycle(false)
+    val confirmDeletions by viewModel.voiceConfirmDeletions.collectAsStateWithLifecycle(true)
+    val earcons by viewModel.voiceEarcons.collectAsStateWithLifecycle(true)
+    val context = LocalContext.current
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -131,6 +143,43 @@ fun SettingsScreen(
                     checked = digestEnabled,
                     onToggle = { viewModel.setDigestEnabled(it) }
                 )
+            }
+
+            Spacer(Modifier.height(Dimens.sectionGap))
+            Text(
+                text = "VOICE",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(Dimens.itemGap))
+
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.itemGap)) {
+                ToggleOption(
+                    label = "Spoken replies",
+                    description = "Read answers aloud as well as showing them",
+                    checked = spokenReplies,
+                    onToggle = { viewModel.setVoiceSpokenReplies(it) }
+                )
+                ToggleOption(
+                    label = "Sound cues",
+                    description = "Short tones when the mic opens and a command lands",
+                    checked = earcons,
+                    onToggle = { viewModel.setVoiceEarcons(it) }
+                )
+                ToggleOption(
+                    label = "On-device recognition",
+                    description = "Private and works offline, but needs a downloaded " +
+                        "language pack — turn it off if nothing is recognised",
+                    checked = preferOffline,
+                    onToggle = { viewModel.setVoicePreferOffline(it) }
+                )
+                ToggleOption(
+                    label = "Confirm spoken deletions",
+                    description = "Ask before a voice command removes a task",
+                    checked = confirmDeletions,
+                    onToggle = { viewModel.setVoiceConfirmDeletions(it) }
+                )
+                AssistantRoleCard(onOpen = { openAssistantSettings(context) })
             }
 
             Spacer(Modifier.height(Dimens.sectionGap))
@@ -217,6 +266,71 @@ private fun SyncSection(
         }
     }
 }
+
+/**
+ * Daily can take over the device's assist gesture. That is the closest a
+ * sideloaded app gets to a hotword: Android gives no free high-quality
+ * always-listening keyword, and a continuous recognizer loop costs battery
+ * and still gets throttled, so the gesture, the tile and the shortcut are
+ * the honest entry points.
+ */
+@Composable
+private fun AssistantRoleCard(onOpen: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(Dimens.cardPadding)) {
+            Text(
+                text = "Hold-for-Daily",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Make Daily the device's assistant app and the home gesture " +
+                    "or power long-press opens voice straight into your list. " +
+                    "There's also a quick-settings tile and a long-press shortcut " +
+                    "on the app icon.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(Dimens.itemGap))
+            OutlinedButton(onClick = onOpen) {
+                Text("Choose the assistant app")
+            }
+        }
+    }
+}
+
+/**
+ * API 29+ can ask for the assistant role directly; older versions, and
+ * devices whose OEM skin refuses the request, get the settings screen.
+ */
+private fun openAssistantSettings(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager != null &&
+            roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) &&
+            !roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)
+        ) {
+            val request = roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)
+            if (startSafely(context, request)) return
+        }
+    }
+    val fallbacks = listOf(
+        Intent(AndroidSettings.ACTION_VOICE_INPUT_SETTINGS),
+        Intent(AndroidSettings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+        Intent(AndroidSettings.ACTION_SETTINGS)
+    )
+    fallbacks.firstOrNull { startSafely(context, it) }
+}
+
+private fun startSafely(context: Context, intent: Intent): Boolean = runCatching {
+    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    true
+}.getOrDefault(false)
 
 private val lastSyncFormatter =
     java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm")

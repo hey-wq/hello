@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the launcher icon to start a voice session. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="voice"
+        android:enabled="true"
+        android:icon="@drawable/ic_mic"
+        android:shortcutShortLabel="@string/voice_shortcut_short"
+        android:shortcutLongLabel="@string/voice_shortcut_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.signidesign.dailytasks"
+            android:targetClass="com.signidesign.dailytasks.voice.VoiceAssistActivity" />
+    </shortcut>
+</shortcuts>

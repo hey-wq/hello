@@ -62,15 +62,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.signidesign.dailytasks.R
 import com.signidesign.dailytasks.ui.AppViewModel
 import com.signidesign.dailytasks.ui.theme.AppTheme
 import com.signidesign.dailytasks.ui.theme.Dimens
 import com.signidesign.dailytasks.util.isToday
+import com.signidesign.dailytasks.voice.VoiceAssistActivity
+import com.signidesign.dailytasks.voice.VoiceMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -103,6 +108,7 @@ fun DayScreen(
 ) {
     val pagerState = rememberPagerState(initialPage = START_PAGE) { PAGE_COUNT }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val now by rememberNow()
 
     fun dateFor(page: Int): LocalDate = initialDate.plusDays((page - START_PAGE).toLong())
@@ -138,6 +144,16 @@ fun DayScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                IconButton(onClick = {
+                    context.startActivity(VoiceAssistActivity.intent(context))
+                }) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mic),
+                        contentDescription = "Voice",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 IconButton(onClick = onOpenCalendar) {
                     Icon(
                         Icons.Default.DateRange,
@@ -176,6 +192,7 @@ private fun DayPage(
 ) {
     val tasks by remember(date) { viewModel.tasksFor(date) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
+    val pageContext = LocalContext.current
     var notesExpanded by rememberSaveable(date) { mutableStateOf(false) }
     var expandedTaskId by remember(date) { mutableStateOf<Long?>(null) }
 
@@ -229,7 +246,16 @@ private fun DayPage(
         }
 
         Spacer(Modifier.height(Dimens.sectionGap))
-        AddTaskField(onAdd = { title -> viewModel.addTask(title, date) })
+        AddTaskField(
+            onAdd = { title -> viewModel.addTask(title, date) },
+            onDictate = {
+                // Anchored to the page's date, so "add X" lands on the day
+                // being looked at and "tomorrow" is relative to it.
+                pageContext.startActivity(
+                    VoiceAssistActivity.intent(pageContext, VoiceMode.DICTATION, date)
+                )
+            }
+        )
 
         if (isToday(date) && pastCount > 0 && !rolloverDismissed) {
             Spacer(Modifier.height(Dimens.itemGap))
@@ -445,7 +471,7 @@ private fun DayNotesPanel(date: LocalDate, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun AddTaskField(onAdd: (String) -> Unit) {
+private fun AddTaskField(onAdd: (String) -> Unit, onDictate: () -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
 
     fun submit() {
@@ -468,6 +494,16 @@ private fun AddTaskField(onAdd: (String) -> Unit) {
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        },
+        trailingIcon = {
+            IconButton(onClick = onDictate) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mic),
+                    contentDescription = "Dictate a task",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

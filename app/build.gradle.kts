@@ -59,4 +59,5 @@ dependencies {
     implementation(libs.androidx.glance.material3)
     implementation(libs.okhttp)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation(libs.junit)
 }

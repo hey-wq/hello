@@ -17,6 +17,10 @@ private val DIGEST_ENABLED_KEY = booleanPreferencesKey("digest_enabled")
 private val SYNC_URL_KEY = stringPreferencesKey("sync_url")
 private val SYNC_TOKEN_KEY = stringPreferencesKey("sync_token")
 private val LAST_SYNC_AT_KEY = longPreferencesKey("last_sync_at")
+private val VOICE_SPEAK_KEY = booleanPreferencesKey("voice_spoken_replies")
+private val VOICE_OFFLINE_KEY = booleanPreferencesKey("voice_prefer_offline")
+private val VOICE_CONFIRM_DELETE_KEY = booleanPreferencesKey("voice_confirm_deletions")
+private val VOICE_EARCONS_KEY = booleanPreferencesKey("voice_earcons")
 
 /** User preferences: theme plus notification switches. */
 class SettingsRepository(private val context: Context) {
@@ -63,6 +67,48 @@ class SettingsRepository(private val context: Context) {
             it[SYNC_URL_KEY] = url.trim()
             it[SYNC_TOKEN_KEY] = token.trim()
         }
+    }
+
+    // ------------------------------------------------------------------ voice
+
+    /** Spoken replies; off leaves the transcript on screen only. */
+    val voiceSpokenReplies: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+        prefs[VOICE_SPEAK_KEY] ?: true
+    }
+
+    /**
+     * Force on-device recognition. Off by default: it is private and works
+     * on a plane, but needs a downloaded language pack, and without one the
+     * recognizer simply reports no match.
+     */
+    val voicePreferOffline: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+        prefs[VOICE_OFFLINE_KEY] ?: false
+    }
+
+    /** Ask before a spoken delete actually removes the task. */
+    val voiceConfirmDeletions: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+        prefs[VOICE_CONFIRM_DELETE_KEY] ?: true
+    }
+
+    /** Short tones for mic-open, applied and failed. */
+    val voiceEarcons: Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+        prefs[VOICE_EARCONS_KEY] ?: true
+    }
+
+    suspend fun setVoiceEarcons(enabled: Boolean) {
+        context.settingsDataStore.edit { it[VOICE_EARCONS_KEY] = enabled }
+    }
+
+    suspend fun setVoiceSpokenReplies(enabled: Boolean) {
+        context.settingsDataStore.edit { it[VOICE_SPEAK_KEY] = enabled }
+    }
+
+    suspend fun setVoicePreferOffline(enabled: Boolean) {
+        context.settingsDataStore.edit { it[VOICE_OFFLINE_KEY] = enabled }
+    }
+
+    suspend fun setVoiceConfirmDeletions(enabled: Boolean) {
+        context.settingsDataStore.edit { it[VOICE_CONFIRM_DELETE_KEY] = enabled }
     }
 
     suspend fun setLastSyncAt(value: Long) {
