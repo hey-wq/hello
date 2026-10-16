@@ -1,5 +1,9 @@
 package com.signidesign.dailytasks.voice
 
+import com.signidesign.dailytasks.baby.BabyStats
+import com.signidesign.dailytasks.data.BabyEventKind
+import com.signidesign.dailytasks.data.BabyLane
+import com.signidesign.dailytasks.data.BabyRepository
 import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskEntity
 import com.signidesign.dailytasks.data.TaskRepository
@@ -7,8 +11,11 @@ import com.signidesign.dailytasks.notifications.ReminderManager
 import com.signidesign.dailytasks.sync.SyncEngine
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 
 /**
  * Applies a parsed command to the same repositories the screens use, and
@@ -24,6 +31,8 @@ class VoiceCommandExecutor(
     private val settings: SettingsRepository,
     private val reminders: ReminderManager,
     private val syncEngine: SyncEngine,
+    private val baby: BabyRepository,
+    private val zone: ZoneId = ZoneId.systemDefault(),
     private val clock: () -> LocalDateTime = { LocalDateTime.now() }
 ) {
     /** How far either side of today a spoken task title is looked for. */
@@ -65,6 +74,19 @@ class VoiceCommandExecutor(
                 navigation = VoiceNavigation.Settings,
                 close = true
             )
+            is BabyStart -> babyStart(command.kind)
+            is BabyStop -> babyStop(command.lane)
+            is BabyLog -> babyLog(command.kind, command.amountMl)
+            BabyNappyUnspecified -> VoiceOutcome(
+                speech = "Wet, dirty, or both?",
+                pending = PendingAction.AskNappyKind
+            )
+            is BabyAsk -> babyAsk(command.topic)
+            BabyOpen -> VoiceOutcome(
+                speech = "Opening the baby log.",
+                navigation = VoiceNavigation.Baby,
+                close = true
+            )
             VoiceCommand.Help -> VoiceOutcome(Speech.help)
             VoiceCommand.Stop -> VoiceOutcome("Okay.", close = true)
             VoiceCommand.Affirm, VoiceCommand.Deny, is VoiceCommand.Choice ->
@@ -98,6 +120,16 @@ class VoiceCommandExecutor(
             VoiceCommand.Deny, VoiceCommand.Stop ->
                 VoiceOutcome("Left ${pending.title} where it is.")
             else -> null // a new command supersedes the question
+        }
+
+        PendingAction.AskNappyKind -> {
+            val kind = BabyVoice.parseNappyAnswer(utteranceOf(command))
+            when {
+                kind != null -> babyLog(kind, null)
+                command == VoiceCommand.Deny || command == VoiceCommand.Stop ->
+                    VoiceOutcome("Dropped it.")
+                else -> null // a different command supersedes the question
+            }
         }
 
         is PendingAction.Disambiguate -> when (command) {
@@ -343,6 +375,179 @@ class VoiceCommandExecutor(
         is SyncEngine.SyncResult.Error -> VoiceOutcome("Sync failed. ${result.message}")
         SyncEngine.SyncResult.NotConfigured ->
             VoiceOutcome("Sheets sync isn't set up yet. Add the URL and token in settings.")
+    }
+
+    // ------------------------------------------------------------------- baby
+
+    private fun nowInstant(): Instant = clock().atZone(zone).toInstant()
+
+    private suspend fun babyStart(kind: BabyEventKind): VoiceOutcome {
+        val at = nowInstant()
+        // Switching sides mid-feed is one spoken command; say what it closed
+        // so an accidental switch is obvious immediately.
+        val previous = if (kind.lane != BabyLane.EVENT) {
+            baby.openSessionOnce(kind.lane)?.takeIf { it.kind != kind }
+        } else {
+            null
+        }
+        baby.startSession(kind, at)
+
+        val closed = previous?.let { earlier ->
+            " Ended ${earlier.kind.label.lowercase()} after " +
+                BabyStats.speakDuration(Duration.between(earlier.startAt, at)) + "."
+        } ?: ""
+
+        return VoiceOutcome(
+            when (kind) {
+                BabyEventKind.SLEEP -> "Sleep started.$closed"
+                BabyEventKind.PUMP -> "Pumping started.$closed"
+                else -> "${kind.label} side, started.$closed"
+            }
+        )
+    }
+
+    private suspend fun babyStop(lane: BabyLane): VoiceOutcome {
+        val at = nowInstant()
+        val closed = baby.endSession(lane, at)
+            ?: return VoiceOutcome(
+                if (lane == BabyLane.SLEEP) "Nothing was logged as sleeping."
+                else "Nothing was logged as feeding."
+            )
+        val length = BabyStats.speakDuration(
+            Duration.between(closed.startAt, closed.endAt ?: at)
+        )
+        return VoiceOutcome(
+            when (closed.kind) {
+                BabyEventKind.SLEEP -> "Slept $length."
+                BabyEventKind.PUMP -> "Pumped for $length."
+                else -> "$length on the ${closed.kind.label.lowercase()}."
+            }
+        )
+    }
+
+    private suspend fun babyLog(kind: BabyEventKind, amountMl: Int?): VoiceOutcome {
+        baby.logEvent(kind, nowInstant(), amountMl)
+        return VoiceOutcome(
+            when {
+                kind == BabyEventKind.BOTTLE && amountMl != null ->
+                    "Logged a ${amountMl}ml bottle."
+                kind == BabyEventKind.BOTTLE -> "Bottle logged."
+                kind.isNappy -> "${kind.label} nappy logged."
+                else -> "${kind.label} logged."
+            }
+        )
+    }
+
+    private suspend fun babyAsk(topic: BabyTopic): VoiceOutcome {
+        val now = nowInstant()
+        val day = clock().toLocalDate()
+        val events = baby.eventsForDayOnce(day, zone)
+        val summary = BabyStats.summarise(events, day, zone, now)
+
+        return VoiceOutcome(
+            when (topic) {
+                BabyTopic.SLEEP -> if (summary.sleepTime.isZero) {
+                    "No sleep logged today yet."
+                } else {
+                    "${BabyStats.speakDuration(summary.sleepTime)} of sleep today, " +
+                        "across ${summary.sleepSessions} " +
+                        (if (summary.sleepSessions == 1) "sleep" else "sleeps") +
+                        ", the longest ${BabyStats.speakDuration(summary.longestSleep)}."
+                }
+
+                BabyTopic.FEEDS -> if (summary.feedCount == 0) {
+                    "No feeds logged today yet."
+                } else {
+                    buildString {
+                        append("${summary.feedCount} feeds today")
+                        if (!summary.breastTime.isZero) {
+                            append(", ${BabyStats.speakDuration(summary.breastTime)} at the breast")
+                        }
+                        if (summary.bottleMl > 0) append(", ${summary.bottleMl}ml by bottle")
+                        append(".")
+                    }
+                }
+
+                BabyTopic.LAST_FEED -> lastFeedAnswer(now)
+
+                BabyTopic.NAPPIES -> if (summary.nappyTotal == 0) {
+                    "No nappies logged today yet."
+                } else {
+                    "${summary.nappyTotal} nappies today, " +
+                        "${summary.nappyWet} wet and ${summary.nappyDirty} dirty."
+                }
+
+                BabyTopic.STATUS -> statusAnswer(now)
+
+                BabyTopic.SUMMARY -> buildString {
+                    append("${summary.feedCount} feeds")
+                    if (!summary.breastTime.isZero) {
+                        append(", ${BabyStats.speakDuration(summary.breastTime)} at the breast")
+                    }
+                    if (summary.bottleMl > 0) append(", ${summary.bottleMl}ml by bottle")
+                    append(". ${BabyStats.speakDuration(summary.sleepTime)} of sleep")
+                    if (!summary.longestSleep.isZero) {
+                        append(", longest ${BabyStats.speakDuration(summary.longestSleep)}")
+                    }
+                    append(". ${summary.nappyTotal} nappies.")
+                    summary.lastFeedAt?.let { last ->
+                        append(
+                            " Last feed " +
+                                BabyStats.speakDuration(Duration.between(last, now)) + " ago."
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    private suspend fun lastFeedAnswer(now: Instant): String {
+        val last = baby.lastOf(
+            BabyEventKind.BREAST_LEFT,
+            BabyEventKind.BREAST_RIGHT,
+            BabyEventKind.BOTTLE,
+            BabyEventKind.SOLIDS
+        ) ?: return "No feed logged yet."
+
+        if (last.endAt == null) {
+            return "Still feeding on the ${last.kind.label.lowercase()}, " +
+                "${BabyStats.speakDuration(Duration.between(last.startAt, now))} so far."
+        }
+        val since = BabyStats.speakDuration(Duration.between(last.endAt, now))
+        val what = when {
+            last.kind.isBreast -> "the ${last.kind.label.lowercase()} breast"
+            last.kind == BabyEventKind.BOTTLE ->
+                last.amountMl?.let { "a ${it}ml bottle" } ?: "a bottle"
+            else -> last.kind.label.lowercase()
+        }
+        return "Last feed was $since ago, $what."
+    }
+
+    private suspend fun statusAnswer(now: Instant): String {
+        val sleep = baby.openSleepOnce()
+        val feed = baby.openFeedOnce()
+        val parts = mutableListOf<String>()
+        sleep?.let {
+            parts += "asleep for " +
+                BabyStats.speakDuration(Duration.between(it.startAt, now))
+        }
+        feed?.let {
+            val label = when (it.kind) {
+                BabyEventKind.PUMP -> "pumping for "
+                else -> "feeding on the ${it.kind.label.lowercase()} for "
+            }
+            parts += label + BabyStats.speakDuration(Duration.between(it.startAt, now))
+        }
+        return if (parts.isEmpty()) "Nothing running right now."
+        else Speech.list(parts).replaceFirstChar { it.uppercaseChar() } + "."
+    }
+
+    /** The raw words behind a command, for answering a free-form question. */
+    private fun utteranceOf(command: VoiceCommand): String = when (command) {
+        is VoiceCommand.NotUnderstood -> command.utterance
+        is VoiceCommand.AddTask -> command.title
+        is BabyLog -> command.kind.label
+        else -> ""
     }
 
     // ------------------------------------------------------------- the reads

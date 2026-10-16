@@ -62,8 +62,10 @@ object Speech {
     }
 
     val help: String =
-        "I can add, read back, complete, move, reschedule and delete tasks. " +
-            "Try: add call Delta Controls tomorrow at 3 for 45 minutes. " +
+        "For your day: add call Delta Controls tomorrow at 3 for 45 minutes. " +
             "What's on Friday. Mark the Nestlé deck as done. " +
-            "Push the invoice to Monday. Or, what's next."
+            "Push the invoice to Monday. What's next. " +
+            "For the baby: feeding on the left. She's asleep. She's awake. " +
+            "Log a 120ml bottle. Wet nappy. How much sleep today. " +
+            "When was the last feed."
 }

@@ -8,6 +8,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.signidesign.dailytasks.ui.AppViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.signidesign.dailytasks.ui.baby.BabyScreen
+import com.signidesign.dailytasks.ui.baby.BabyViewModel
 import com.signidesign.dailytasks.ui.calendar.CalendarScreen
 import com.signidesign.dailytasks.ui.day.DayScreen
 import com.signidesign.dailytasks.ui.settings.SettingsScreen
@@ -17,6 +20,7 @@ object Routes {
     const val DAY = "day?epochDay={epochDay}"
     const val CALENDAR = "calendar"
     const val SETTINGS = "settings"
+    const val BABY = "baby"
 
     fun day(date: LocalDate? = null): String =
         if (date == null) "day" else "day?epochDay=${date.toEpochDay()}"
@@ -38,6 +42,7 @@ fun AppNavHost(
         when (initialRoute) {
             Routes.CALENDAR -> navController.navigate(Routes.CALENDAR)
             Routes.SETTINGS -> navController.navigate(Routes.SETTINGS)
+            Routes.BABY -> navController.navigate(Routes.BABY)
         }
     }
 
@@ -58,7 +63,8 @@ fun AppNavHost(
                 viewModel = viewModel,
                 initialDate = pageDate,
                 onOpenCalendar = { navController.navigate(Routes.CALENDAR) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) }
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenBaby = { navController.navigate(Routes.BABY) }
             )
         }
         composable(Routes.CALENDAR) {
@@ -69,6 +75,13 @@ fun AppNavHost(
                         popUpTo(navController.graph.startDestinationId) { inclusive = true }
                     }
                 },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.BABY) {
+            val babyViewModel: BabyViewModel = viewModel(factory = BabyViewModel.Factory)
+            BabyScreen(
+                viewModel = babyViewModel,
                 onBack = { navController.popBackStack() }
             )
         }

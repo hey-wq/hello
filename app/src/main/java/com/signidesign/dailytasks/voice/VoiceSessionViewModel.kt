@@ -232,7 +232,8 @@ class VoiceSessionViewModel(
                         tasks = container.taskRepository,
                         settings = container.settingsRepository,
                         reminders = container.reminderManager,
-                        syncEngine = container.syncEngine
+                        syncEngine = container.syncEngine,
+                        baby = container.babyRepository
                     ),
                     speechToText = SpeechToText(app),
                     speaker = Speaker(app),

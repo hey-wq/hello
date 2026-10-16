@@ -104,7 +104,8 @@ fun DayScreen(
     viewModel: AppViewModel,
     initialDate: LocalDate,
     onOpenCalendar: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenBaby: () -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = START_PAGE) { PAGE_COUNT }
     val scope = rememberCoroutineScope()
@@ -144,6 +145,8 @@ fun DayScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                TextPill(label = "BABY", onClick = onOpenBaby)
+                Spacer(Modifier.width(Dimens.innerGap))
                 IconButton(onClick = {
                     context.startActivity(VoiceAssistActivity.intent(context))
                 }) {
@@ -408,6 +411,24 @@ private fun DayHeader(
             Spacer(Modifier.weight(1f))
             NotesPill(active = notesExpanded, onClick = onToggleNotes)
         }
+    }
+}
+
+/** Small labelled pill for a secondary destination; type, not iconography. */
+@Composable
+private fun TextPill(label: String, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        onClick = onClick
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }
 

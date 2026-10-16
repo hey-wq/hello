@@ -83,6 +83,7 @@ class VoiceAssistActivity : ComponentActivity() {
                     is VoiceNavigation.Day -> openMain(epochDay = destination.date.toEpochDay())
                     VoiceNavigation.Calendar -> openMain(route = ROUTE_CALENDAR)
                     VoiceNavigation.Settings -> openMain(route = ROUTE_SETTINGS)
+                    VoiceNavigation.Baby -> openMain(route = ROUTE_BABY)
                     null -> return@LaunchedEffect
                 }
                 viewModel.navigationHandled()
@@ -134,6 +135,7 @@ class VoiceAssistActivity : ComponentActivity() {
 
         const val ROUTE_CALENDAR = "calendar"
         const val ROUTE_SETTINGS = "settings"
+        const val ROUTE_BABY = "baby"
 
         /** [date] anchors relative dates; pass the day the user is looking at. */
         fun intent(

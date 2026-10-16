@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
         val initialRoute = when (intent.getStringExtra(VoiceAssistActivity.EXTRA_ROUTE)) {
             VoiceAssistActivity.ROUTE_CALENDAR -> Routes.CALENDAR
             VoiceAssistActivity.ROUTE_SETTINGS -> Routes.SETTINGS
+            VoiceAssistActivity.ROUTE_BABY -> Routes.BABY
             else -> null
         }
 

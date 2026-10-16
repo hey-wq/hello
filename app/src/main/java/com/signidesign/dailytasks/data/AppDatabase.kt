@@ -9,14 +9,20 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [TaskEntity::class, DayNoteEntity::class, DeletedTaskEntity::class],
-    version = 3,
+    entities = [
+        TaskEntity::class,
+        DayNoteEntity::class,
+        DeletedTaskEntity::class,
+        BabyEventEntity::class
+    ],
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun dayNoteDao(): DayNoteDao
+    abstract fun babyDao(): BabyDao
 
     companion object {
         @Volatile
@@ -52,13 +58,46 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v4: baby tracking. One table for every logged moment; an open
+        // session is endAt IS NULL, so the indices carry the three reads
+        // that matter (by time, by kind, open-or-not).
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `baby_events` (
+                       `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                       `kind` TEXT NOT NULL,
+                       `startAt` INTEGER NOT NULL,
+                       `endAt` INTEGER,
+                       `amountMl` INTEGER,
+                       `note` TEXT,
+                       `babyId` INTEGER NOT NULL DEFAULT 0,
+                       `uuid` TEXT NOT NULL DEFAULT '',
+                       `updatedAt` INTEGER NOT NULL DEFAULT 0)"""
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_baby_events_startAt` " +
+                        "ON `baby_events` (`startAt`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_baby_events_kind` " +
+                        "ON `baby_events` (`kind`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_baby_events_endAt` " +
+                        "ON `baby_events` (`endAt`)"
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "daily-tasks.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .build().also { instance = it }
             }
     }
 }

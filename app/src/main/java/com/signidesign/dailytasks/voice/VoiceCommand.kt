@@ -78,11 +78,15 @@ sealed interface VoiceNavigation {
     data class Day(val date: LocalDate) : VoiceNavigation
     data object Calendar : VoiceNavigation
     data object Settings : VoiceNavigation
+    data object Baby : VoiceNavigation
 }
 
 /** A follow-up the session is waiting on; resolved by the next utterance. */
 sealed interface PendingAction {
     data class ConfirmDelete(val taskId: Long, val title: String) : PendingAction
+    /** "nappy change" with no kind named; answered with wet / dirty / both. */
+    data object AskNappyKind : PendingAction
+
     data class Disambiguate(
         val taskIds: List<Long>,
         val titles: List<String>,

@@ -3,6 +3,7 @@ package com.signidesign.dailytasks
 import android.app.Application
 import android.content.Context
 import com.signidesign.dailytasks.data.AppDatabase
+import com.signidesign.dailytasks.data.BabyRepository
 import com.signidesign.dailytasks.data.SettingsRepository
 import com.signidesign.dailytasks.data.TaskRepository
 import com.signidesign.dailytasks.notifications.ReminderManager
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 class AppContainer(context: Context) {
     private val database = AppDatabase.get(context)
     val taskRepository = TaskRepository(database.taskDao(), database.dayNoteDao())
+    val babyRepository = BabyRepository(database.babyDao())
     val settingsRepository = SettingsRepository(context)
     val reminderManager = ReminderManager(context, taskRepository, settingsRepository)
     val syncEngine = SyncEngine(taskRepository, settingsRepository)

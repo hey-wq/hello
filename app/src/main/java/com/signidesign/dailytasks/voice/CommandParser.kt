@@ -156,6 +156,10 @@ object CommandParser {
         if (help.matches(text)) return VoiceCommand.Help
         choice.find(text)?.let { return VoiceCommand.Choice(choiceIndex(it.value)) }
 
+        // Baby grammar first: the collisions all run that way round
+        // ("log a bottle" would otherwise become a task called "a bottle").
+        BabyVoice.parse(text)?.let { return it }
+
         if (syncNow.matches(text)) return VoiceCommand.SyncNow
         if (rollover.containsMatchIn(text)) return VoiceCommand.Rollover(today)
         if (openCalendar.matches(text)) return VoiceCommand.OpenCalendar

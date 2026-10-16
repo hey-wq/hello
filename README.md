@@ -21,6 +21,8 @@ Jetpack Compose, Material 3, Room.
   spoken replies. Reachable from the device assist gesture, a
   quick-settings tile, the launcher shortcut or the mic in the app. See
   [Voice](#voice).
+- **Baby** — feeds, sleep, nappies and pumping, with live session timers, a
+  24-hour sleep pattern strip and daily totals. See [Baby tracking](#baby-tracking).
 - **Settings** — theme: System / Light / Dark. The preference persists via
   DataStore.
 
@@ -32,6 +34,13 @@ Jetpack Compose, Material 3, Room.
 - Manual DI (`AppContainer` on the `Application`) — no Hilt at this size.
 - One `AppViewModel` over two repositories; day pages collect flows keyed by
   arbitrary dates because the pager renders neighbouring days.
+- Baby tracking is a second domain with its own write rules, so it gets its
+  own pieces: a `baby_events` table (one row per logged moment),
+  `BabyRepository` (lanes, open sessions), `BabyStats` (pure, tested
+  derivations) and `BabyViewModel`. Folding it into `AppViewModel` would
+  make the shared surface the thing nobody can read.
+- The voice layer in `voice/` is the one place both domains meet: a single
+  grammar answers "what's on today" and "how much sleep today".
 
 ## Theme system
 
@@ -119,13 +128,95 @@ recognizer simply reports no match.
 
 ### Tests
 
-The grammar carries unit tests (`app/src/test/.../voice`) — a mis-parsed
-date fails silently in a way nothing else in the app does. They run on the
-JVM, and in CI before the APK is built:
+The grammar and the baby statistics carry unit tests
+(`app/src/test/.../voice`, `app/src/test/.../baby`) — a mis-parsed date or a
+sleep total attributed to the wrong side of midnight fails silently in a way
+nothing else in the app does. They run on the JVM, and in CI before the APK
+is built:
 
 ```
 ./gradlew testDebugUnitTest
 ```
+
+## Baby tracking
+
+A second section (**BABY** in the day header, or say "open baby") for the
+things a newborn's day is actually made of.
+
+### Logging
+
+Six tiles, one tap each. **Left** and **Right** start a breast session and
+show a live timer; tapping the same side again ends it, tapping the other
+side switches (ending the first). **Sleep** starts and ends a stretch.
+**Bottle** asks for millilitres from presets or a custom figure. **Nappy**
+asks wet, dirty or both. **Pump** runs as a session and takes a volume.
+
+Whatever is running shows as a large accented card with a live clock —
+readable across a dark room at 4am. The last thing logged gets an **Undo**
+bar, because the mis-tap at 3am is a certainty. Any row in the timeline
+expands for ±5 minutes on the start time (logging always happens a few
+minutes late), an amount, or delete.
+
+### What it tells you
+
+- **Today** — feeds, time at the breast split left/right, bottle volume,
+  total and longest sleep, nappies split wet/dirty, pumped volume, and how
+  long since the last feed.
+- **Sleep pattern** — 24 bars, one per hour, filled by the fraction of that
+  hour spent asleep. A night's shape reads instantly.
+- **Timeline** — everything that touched the day, newest first.
+
+### By voice
+
+This is where it earns its keep: both hands are usually full.
+
+| Say | It does |
+| --- | --- |
+| "feeding on the left" / "left breast" | starts that side |
+| "switch to the right side" | ends the left, starts the right |
+| "stop feeding" / "she's done" | ends it, and says how long |
+| "she's asleep" / "down for a nap" | starts a sleep |
+| "she's awake" / "she woke up" | ends it: "Slept 2 hours 10 minutes." |
+| "log a bottle 120ml" / "120ml bottle" | logs it with the volume |
+| "wet nappy" / "dirty nappy" | logs it |
+| "nappy change" | asks "wet, dirty, or both?" |
+| "start pumping" / "stop pumping" | runs a pumping session |
+| "how much sleep today" | "7 hours 5 minutes, across 2 sleeps, longest 10 hours 40 minutes." |
+| "when was the last feed" | "Last feed was 2 hours 40 minutes ago, the left breast." |
+| "how many nappies today" | totals, split wet and dirty |
+| "what's she doing" | whatever is running, and for how long |
+| "baby summary" | the whole day in one answer |
+
+Chaining works across both domains: *"wet nappy, then she's asleep."*
+
+### Design rules worth knowing
+
+- **Lanes, not types.** Feeding and sleeping are separate lanes, so starting
+  a feed never ends a sleep — dream feeds happen. Within a lane, starting
+  one session ends the open one, which is exactly what switching sides
+  means.
+- **Overlap attribution.** A sleep from 19:40 to 06:20 is four hours of one
+  day and six of the next, and "sleep today" means the six. Totals are
+  computed by overlap with the local day, never by the row's start date.
+  This is the one thing in a baby tracker that is silently wrong everywhere
+  else, so it carries the tests.
+- **Longest sleep is the whole stretch.** Even the part before midnight —
+  that is the number a parent is actually asking about.
+- **Durations are never stored.** An open session is `endAt IS NULL`; every
+  total is derived, the same way the task list derives its time-remaining
+  pill.
+- **One table.** Every read is a time-ordered union across kinds, so
+  `baby_events` holds them all with a `kind` column, rather than four tables
+  merged in Kotlin on every path.
+- **Sideways room for twins.** Rows carry a `babyId`; today it is always 0,
+  and a second baby needs no migration.
+
+### Not in this pass
+
+Baby data does **not** go through the Google Sheets sync yet — that needs
+matching sheets and Apps Script changes, so it stays task-only for now, and
+baby events live on the device. Feed-due reminders and growth (weight,
+length, head circumference) are also deliberately out.
 
 ## Google Sheets sync
 

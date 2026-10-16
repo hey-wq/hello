@@ -19,6 +19,15 @@ class Converters {
     fun toLocalTime(value: Int?): LocalTime? =
         value?.let { LocalTime.ofSecondOfDay(it.toLong()) }
 
+    // Baby event kinds are stored by name, not ordinal: adding a kind must
+    // never renumber the rows already on someone's phone.
+    @TypeConverter
+    fun fromBabyEventKind(value: BabyEventKind?): String? = value?.name
+
+    @TypeConverter
+    fun toBabyEventKind(value: String?): BabyEventKind? =
+        value?.let { stored -> BabyEventKind.entries.firstOrNull { it.name == stored } }
+
     @TypeConverter
     fun fromInstant(value: Instant?): Long? = value?.toEpochMilli()
 
