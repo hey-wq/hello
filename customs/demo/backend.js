@@ -297,6 +297,7 @@
 
   function handle(method, path, body) {
     let m;
+    if (path === "/api/me") return { username: "demo", name: "Demo declarant" };
     if (path === "/api/config") return { reading_configured: false, benchmarks_are_sample: true };
     if (path === "/api/sample") return view(open(body.actor));
     if (path === "/api/shipments" && method === "GET")

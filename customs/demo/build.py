@@ -44,10 +44,7 @@ def build() -> str:
 
 <header class="bar">
   <span class="brand">Customs desk</span>
-  <label class="who">
-    <span>Declarant</span>
-    <input id="actor" type="text" placeholder="Your name" autocomplete="name" maxlength="80" value="Demo declarant">
-  </label>
+  <div class="who" id="who"></div>
 </header>
 <main>
   <div class="demo-note">Demo on a made-up shipment. Nothing is saved or sent, and reloading starts again.

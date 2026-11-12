@@ -38,12 +38,55 @@ anything with a customs authority.
 
 ```
 pip install -r requirements.txt
+python -m customsdesk.auth add maria "Maria Papadopoulou"   # create a user
 export ANTHROPIC_API_KEY=...        # needed to read real documents
 uvicorn --factory customsdesk.api:create_app --port 8000
 ```
 
-Open http://localhost:8000. Without an API key, uploads are switched off and
-"Load sample shipment" shows the review flow on made-up data.
+Open http://localhost:8000 and sign in. Without an API key, uploads are
+switched off and "Load sample shipment" shows the review flow on made-up data.
+
+## Users
+
+Each declarant has their own account, and the record attributes every action
+to the signed-in user. Add or reset a user with
+`python -m customsdesk.auth add <username> "<Full name>"`; passwords need at
+least 10 characters. Sessions last 12 hours. Five wrong passwords lock that
+username for a minute. There are no roles yet: every user can see and act on
+every shipment.
+
+## Install it as an app
+
+Once the tool is hosted on an https address, it installs like an app, with its
+own icon and no browser bars:
+
+- **iPhone or iPad**: open the address in Safari, tap Share, then "Add to Home
+  Screen".
+- **Android**: open it in Chrome, tap the menu, then "Install app".
+- **Desktop Chrome or Edge**: click the install icon in the address bar.
+
+The app keeps no shipment data on the device. Everything is loaded from the
+server each time, so it needs a connection to do anything.
+
+## Host it
+
+The `Dockerfile` packages the tool for any host that runs containers (Render,
+Fly.io, Railway, a VPS). The host needs:
+
+- a persistent disk mounted at `/data`, or everything is lost on each deploy
+- https, which those platforms provide
+- the settings below, with the first user created from the three
+  `CUSTOMSDESK_ADMIN_*` variables on first start
+
+```
+docker build -t customsdesk .
+docker run -p 8000:8000 -v customsdesk-data:/data \
+  -e ANTHROPIC_API_KEY=... \
+  -e CUSTOMSDESK_ADMIN_USER=maria -e CUSTOMSDESK_ADMIN_NAME="Maria Papadopoulou" \
+  -e CUSTOMSDESK_ADMIN_PASSWORD=... customsdesk
+```
+
+Run a single instance: the database is a file on that disk.
 
 Settings (environment variables):
 
@@ -51,12 +94,13 @@ Settings (environment variables):
 |---|---|---|
 | `CUSTOMSDESK_DATA` | `./var` | Database and uploaded documents |
 | `CUSTOMSDESK_BENCHMARKS` | `data/benchmarks_sample.csv` | Reference unit values |
+| `CUSTOMSDESK_ADMIN_USER`, `_NAME`, `_PASSWORD` | none | Creates the first user if there are none |
 | `CUSTOMSDESK_READ_MODEL` | `claude-sonnet-5-5` | First reading of the documents |
 | `CUSTOMSDESK_STRONG_MODEL` | `claude-opus-5-5` | Second reading when needed, and all code proposals |
 
 Set both model variables to the same value to switch the second reading off.
 
-Tests: `python -m pytest`
+Tests: `pip install -r requirements-dev.txt`, then `python -m pytest`
 
 ## Demo page
 
@@ -76,8 +120,11 @@ server; run it after changing the checks.
   Accuracy has to be measured on real past shipments.
 - **Commodity codes are not validated against TARIC.** Only the length is
   checked.
-- **No sign-in.** The declarant types their name; anyone who can reach the
-  server can use it. Run it on a private machine only.
+- **The container image has not been built or run.** The Dockerfile is
+  written but untested; the tool itself was tested by running it directly.
+- **Sign-in is basic.** Passwords and sessions only: no roles, no password
+  reset by email, no two-factor. Adequate for a pilot with a few named users.
+- **No backups.** The data is one folder; the host has to back it up.
 - **Importer documents go to Anthropic's API** for reading. Brokers need to
   agree to that, and it needs covering in the data processing agreement.
 - **The sample shipment is fictional**, including its codes and prices.
@@ -102,7 +149,8 @@ customsdesk/
   checks.py        the checks and the reference table
   service.py       declarant actions and what gets recorded
   store.py         SQLite storage and the hash-chained record
+  auth.py          user accounts and sessions
   record_pdf.py    the record as a PDF
   api.py           HTTP API
-  web/             review screen
+  web/             review screen, app manifest, icons, service worker
 ```

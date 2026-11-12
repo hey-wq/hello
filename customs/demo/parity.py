@@ -82,7 +82,10 @@ def essence(status, data):
 
 def main():
     with tempfile.TemporaryDirectory() as tmp:
-        client = TestClient(create_app(data_dir=tmp))
+        app = create_app(data_dir=tmp)
+        app.state.accounts.set_user("parity", "Parity", "parity-check-password")
+        client = TestClient(app)
+        client.post("/api/login", json={"username": "parity", "password": "parity-check-password"})
         real, sid = [], None
         for method, path, body in STEPS:
             r = client.request(method, path.replace("{id}", str(sid)), json=body)

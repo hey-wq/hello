@@ -66,7 +66,9 @@ a { color: var(--accent); }
 }
 .brand { font-weight: 700; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
 .who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
-.who input { width: 180px; max-width: 42vw; }
+.who span { color: var(--ink); font-weight: 550; }
+.login { max-width: 380px; margin: 8vh auto 0; display: grid; gap: 14px; }
+.login p { margin: 0; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
 
 main {

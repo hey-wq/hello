@@ -12,9 +12,20 @@ ROOT = Path(__file__).resolve().parent.parent
 ME = {"actor": "Test Declarant"}
 
 
+PASSWORD = "correct horse battery"
+
+
+def signed_in_client(tmp_path, **kwargs):
+    app = create_app(data_dir=tmp_path, **kwargs)
+    app.state.accounts.set_user("test", "Test Declarant", PASSWORD)
+    client = TestClient(app)
+    assert client.post("/api/login", json={"username": "test", "password": PASSWORD}).status_code == 200
+    return client
+
+
 @pytest.fixture
 def client(tmp_path):
-    return TestClient(create_app(data_dir=tmp_path))
+    return signed_in_client(tmp_path)
 
 
 def open_sample(client):
@@ -282,7 +293,7 @@ def clean_reading():
 
 
 def upload(tmp_path, reader):
-    client = TestClient(create_app(data_dir=tmp_path, reader=reader))
+    client = signed_in_client(tmp_path, reader=reader)
     r = client.post("/api/shipments", data=ME, files=[("files", ("invoice.pdf", b"%PDF-1.4", "application/pdf"))])
     assert r.status_code == 200, r.text
     return r.json()
@@ -335,3 +346,78 @@ def test_no_second_pass_when_only_one_model_is_configured(tmp_path):
     reader.strong_model = "cheap"
     upload(tmp_path, reader)
     assert reader.passes == ["cheap"]
+
+
+# ---- sign-in ------------------------------------------------------------------
+
+
+def test_everything_needs_a_sign_in(tmp_path):
+    client = TestClient(create_app(data_dir=tmp_path))
+    for method, path in [
+        ("GET", "/api/me"), ("GET", "/api/config"), ("GET", "/api/shipments"), ("POST", "/api/sample"),
+        ("GET", "/api/shipments/x"), ("PATCH", "/api/shipments/x"), ("POST", "/api/shipments/x/approve"),
+        ("POST", "/api/shipments/x/decline"), ("POST", "/api/shipments/x/items/0/confirm"),
+        ("POST", "/api/shipments/x/flags/y/resolve"), ("GET", "/api/shipments/x/declaration.json"),
+        ("GET", "/api/shipments/x/record.pdf"), ("POST", "/api/shipments"),
+    ]:
+        assert client.request(method, path, json={}).status_code == 401, path
+    assert client.get("/").status_code == 200  # the screen itself loads, then asks for sign-in
+
+
+def test_wrong_password_is_refused_then_locked_out(tmp_path):
+    app = create_app(data_dir=tmp_path)
+    app.state.accounts.set_user("test", "Test Declarant", PASSWORD)
+    client = TestClient(app)
+    for _ in range(5):
+        assert client.post("/api/login", json={"username": "test", "password": "wrong"}).status_code == 401
+    assert client.post("/api/login", json={"username": "test", "password": PASSWORD}).status_code == 429
+    assert client.post("/api/login", json={"username": "nobody", "password": "wrong"}).status_code == 401
+
+
+def test_sign_out_ends_the_session(client):
+    assert client.get("/api/me").json()["name"] == "Test Declarant"
+    token = client.cookies["customsdesk_session"]
+    client.post("/api/logout")
+    client.cookies.set("customsdesk_session", token)  # a copied cookie must not work afterwards
+    assert client.get("/api/me").status_code == 401
+
+
+def test_session_cookie_is_not_readable_by_scripts(tmp_path):
+    app = create_app(data_dir=tmp_path)
+    app.state.accounts.set_user("test", "Test Declarant", PASSWORD)
+    r = TestClient(app).post(
+        "/api/login", json={"username": "test", "password": PASSWORD}, headers={"x-forwarded-proto": "https"}
+    )
+    cookie = r.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "samesite=strict" in cookie and "secure" in cookie
+
+
+def test_record_uses_the_signed_in_name_not_one_sent_by_the_browser(client):
+    sid = client.post("/api/sample", json={"actor": "Someone Else"}).json()["shipment"]["id"]
+    view = client.patch(f"/api/shipments/{sid}", json={"actor": "Someone Else", "header": {"freight": 2800}}).json()
+    actors = {e["actor"] for e in view["events"]}
+    assert actors == {"Test Declarant", "system"}
+
+
+def test_short_password_is_refused(tmp_path):
+    app = create_app(data_dir=tmp_path)
+    with pytest.raises(ValueError):
+        app.state.accounts.set_user("test", "Test Declarant", "short")
+
+
+def test_first_user_can_come_from_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUSTOMSDESK_ADMIN_USER", "Owner")
+    monkeypatch.setenv("CUSTOMSDESK_ADMIN_NAME", "Office Owner")
+    monkeypatch.setenv("CUSTOMSDESK_ADMIN_PASSWORD", PASSWORD)
+    client = TestClient(create_app(data_dir=tmp_path))
+    r = client.post("/api/login", json={"username": "owner", "password": PASSWORD})
+    assert r.status_code == 200 and r.json()["name"] == "Office Owner"
+
+
+def test_app_shell_files_are_served(client):
+    manifest = client.get("/manifest.webmanifest").json()
+    assert manifest["display"] == "standalone"
+    for icon in manifest["icons"]:
+        assert client.get(icon["src"]).status_code == 200
+    worker = client.get("/sw.js")
+    assert worker.status_code == 200 and "/api/" in worker.text

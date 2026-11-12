@@ -7,12 +7,13 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import record_pdf
+from .auth import Accounts, TooManyAttempts, User
 from .checks import Benchmarks
 from .extract import ClaudeReader, NoReader, Reader, ReaderNotConfigured
 from .models import Classification, Extraction, Representation, Resolution, Shipment, Status
@@ -24,22 +25,26 @@ WEB = Path(__file__).resolve().parent / "web"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
-class Actor(BaseModel):
-    actor: str = Field(min_length=2, max_length=80)
+COOKIE = "customsdesk_session"
 
 
-class Edit(Actor):
+class Credentials(BaseModel):
+    username: str = Field(max_length=80)
+    password: str = Field(max_length=200)
+
+
+class Edit(BaseModel):
     header: dict = {}
     importer: dict = {}
     items: dict[int, dict] = {}
 
 
-class Resolve(Actor):
+class Resolve(BaseModel):
     resolution: Resolution
     note: str
 
 
-class Decline(Actor):
+class Decline(BaseModel):
     reason: str
 
 
@@ -65,7 +70,42 @@ def create_app(
         Benchmarks.from_csv(benchmarks_path),
         vat_check=lambda vat: None,  # online VIES validation is not wired up yet
     )
-    app = FastAPI(title="Customs desk", docs_url=None, redoc_url=None)
+    accounts = Accounts(data_dir)
+    accounts.bootstrap_from_environment()
+    app = FastAPI(title="Customs desk", docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.accounts = accounts
+
+    def signed_in(request: Request) -> User:
+        user = accounts.user_for(request.cookies.get(COOKIE))
+        if user is None:
+            raise HTTPException(401, "Sign in to continue.")
+        return user
+
+    @app.post("/api/login")
+    def login(body: Credentials, request: Request):
+        try:
+            token = accounts.sign_in(body.username, body.password)
+        except TooManyAttempts:
+            raise HTTPException(429, "Too many attempts. Wait a minute and try again.") from None
+        if token is None:
+            raise HTTPException(401, "The username or password is not right.")
+        user = accounts.user_for(token)
+        response = JSONResponse({"username": user.username, "name": user.name})
+        # Behind a hosting platform's proxy the original scheme arrives in a header.
+        https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+        response.set_cookie(COOKIE, token, httponly=True, samesite="strict", secure=https, max_age=12 * 60 * 60)
+        return response
+
+    @app.post("/api/logout")
+    def logout(request: Request):
+        accounts.sign_out(request.cookies.get(COOKIE))
+        response = JSONResponse({})
+        response.delete_cookie(COOKIE)
+        return response
+
+    @app.get("/api/me")
+    def me(user: User = Depends(signed_in)):
+        return {"username": user.username, "name": user.name}
 
     @app.exception_handler(NotAllowed)
     async def _not_allowed(_, exc: NotAllowed):
@@ -91,14 +131,14 @@ def create_app(
         }
 
     @app.get("/api/config")
-    def config():
+    def config(user: User = Depends(signed_in)):
         return {
             "reading_configured": not isinstance(reader, NoReader),
             "benchmarks_are_sample": "sample" in benchmarks_path.name,
         }
 
     @app.get("/api/shipments")
-    def list_shipments():
+    def list_shipments(user: User = Depends(signed_in)):
         return [
             {
                 "id": s.id,
@@ -115,9 +155,9 @@ def create_app(
 
     @app.post("/api/shipments")
     async def open_shipment(
-        actor: str = Form(min_length=2, max_length=80),
         representation: Representation = Form(Representation.DIRECT),
         files: list[UploadFile] = File(...),
+        user: User = Depends(signed_in),
     ):
         documents = []
         for upload in files:
@@ -126,7 +166,7 @@ def create_app(
                 raise HTTPException(413, f"{upload.filename} is larger than 20 MB.")
             documents.append((upload.filename or "document", data))
         try:
-            shipment = desk.open_from_documents(documents, representation, actor)
+            shipment = desk.open_from_documents(documents, representation, user.name)
         except ReaderNotConfigured:
             raise
         except ValueError as exc:
@@ -136,47 +176,47 @@ def create_app(
         return view(shipment)
 
     @app.post("/api/sample")
-    def open_sample(body: Actor):
+    def open_sample(user: User = Depends(signed_in)):
         sample = json.loads((ROOT / "samples" / "sample_shipment.json").read_text(encoding="utf-8"))
         shipment = desk.open(
             Extraction.model_validate(sample["extraction"]),
             Classification.model_validate(sample["classification"]),
             Representation.DIRECT,
-            body.actor,
+            user.name,
         )
         return view(shipment)
 
     @app.get("/api/shipments/{shipment_id}")
-    def get_shipment(shipment_id: str):
+    def get_shipment(shipment_id: str, user: User = Depends(signed_in)):
         return view(load(shipment_id))
 
     @app.patch("/api/shipments/{shipment_id}")
-    def edit_shipment(shipment_id: str, body: Edit):
+    def edit_shipment(shipment_id: str, body: Edit, user: User = Depends(signed_in)):
         load(shipment_id)
-        return view(desk.edit(shipment_id, body.actor, body.header, body.importer, body.items))
+        return view(desk.edit(shipment_id, user.name, body.header, body.importer, body.items))
 
     @app.post("/api/shipments/{shipment_id}/items/{item_index}/confirm")
-    def confirm_code(shipment_id: str, item_index: int, body: Actor):
+    def confirm_code(shipment_id: str, item_index: int, user: User = Depends(signed_in)):
         load(shipment_id)
-        return view(desk.confirm_code(shipment_id, item_index, body.actor))
+        return view(desk.confirm_code(shipment_id, item_index, user.name))
 
     @app.post("/api/shipments/{shipment_id}/flags/{flag_id}/resolve")
-    def resolve_flag(shipment_id: str, flag_id: str, body: Resolve):
+    def resolve_flag(shipment_id: str, flag_id: str, body: Resolve, user: User = Depends(signed_in)):
         load(shipment_id)
-        return view(desk.resolve_flag(shipment_id, flag_id, body.resolution, body.note, body.actor))
+        return view(desk.resolve_flag(shipment_id, flag_id, body.resolution, body.note, user.name))
 
     @app.post("/api/shipments/{shipment_id}/approve")
-    def approve(shipment_id: str, body: Actor):
+    def approve(shipment_id: str, user: User = Depends(signed_in)):
         load(shipment_id)
-        return view(desk.approve(shipment_id, body.actor))
+        return view(desk.approve(shipment_id, user.name))
 
     @app.post("/api/shipments/{shipment_id}/decline")
-    def decline(shipment_id: str, body: Decline):
+    def decline(shipment_id: str, body: Decline, user: User = Depends(signed_in)):
         load(shipment_id)
-        return view(desk.decline(shipment_id, body.reason, body.actor))
+        return view(desk.decline(shipment_id, body.reason, user.name))
 
     @app.get("/api/shipments/{shipment_id}/declaration.json")
-    def export_declaration(shipment_id: str):
+    def export_declaration(shipment_id: str, user: User = Depends(signed_in)):
         shipment = load(shipment_id)
         if shipment.status != Status.APPROVED:
             raise NotAllowed("Only an approved declaration can be exported.")
@@ -187,7 +227,7 @@ def create_app(
         )
 
     @app.get("/api/shipments/{shipment_id}/record.pdf")
-    def export_record(shipment_id: str):
+    def export_record(shipment_id: str, user: User = Depends(signed_in)):
         shipment = load(shipment_id)
         pdf = record_pdf.render(shipment, desk.store.events(shipment_id), desk.store.record_intact(shipment_id))
         return Response(
@@ -198,7 +238,16 @@ def create_app(
 
     @app.get("/")
     def index():
-        return FileResponse(WEB / "index.html")
+        return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-cache"})
+
+    # The service worker and manifest are served from the root so the app's scope is the whole site.
+    @app.get("/sw.js")
+    def service_worker():
+        return FileResponse(WEB / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return FileResponse(WEB / "manifest.webmanifest", media_type="application/manifest+json")
 
     app.mount("/static", StaticFiles(directory=WEB), name="static")
     return app

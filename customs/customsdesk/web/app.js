@@ -1,7 +1,8 @@
 "use strict";
 
 const app = document.getElementById("app");
-const actorInput = document.getElementById("actor");
+const whoEl = document.getElementById("who");
+let user = null; // the signed-in declarant; every action is recorded against them
 const toastEl = document.getElementById("toast");
 
 const RESOLUTIONS = {
@@ -56,12 +57,7 @@ function toast(message) {
 }
 
 function actor() {
-  const name = actorInput.value.trim();
-  if (name.length < 2) {
-    actorInput.focus();
-    throw new Error("Enter your name first. Every action is recorded against it.");
-  }
-  return name;
+  return user ? user.name : "";
 }
 
 async function api(method, path, body) {
@@ -72,6 +68,11 @@ async function api(method, path, body) {
     options.body = JSON.stringify(body);
   }
   const response = await fetch(path, options);
+  if (response.status === 401 && path !== "/api/login") {
+    user = null;
+    showLogin();
+    throw new Error("Your session has ended. Sign in again.");
+  }
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -97,6 +98,34 @@ const when = (iso) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium
 
 function chip(text, kind) {
   return h("span", { class: "chip " + (kind || "") }, text);
+}
+
+// ---- sign-in ---------------------------------------------------------------
+
+function renderWho() {
+  if (!user) return whoEl.replaceChildren();
+  whoEl.replaceChildren(
+    h("span", {}, user.name),
+    !window.DEMO && h("button", { class: "small", onclick: async () => { await run(() => api("POST", "/api/logout")); user = null; showLogin(); } }, "Sign out"));
+}
+
+function showLogin() {
+  renderWho();
+  const username = h("input", { id: "login-username", type: "text", autocomplete: "username", autocapitalize: "none", required: true });
+  const password = h("input", { id: "login-password", type: "password", autocomplete: "current-password", required: true });
+  const submit = async (e) => {
+    e.preventDefault();
+    const me = await run(() => api("POST", "/api/login", { username: username.value, password: password.value }));
+    if (me) { user = me; renderWho(); route(); }
+  };
+  app.replaceChildren(
+    h("form", { class: "card login", onsubmit: submit },
+      h("h1", {}, "Sign in"),
+      h("p", { class: "muted" }, "Everything you do here is recorded under your name."),
+      h("label", { class: "field" }, h("span", {}, "Username"), username),
+      h("label", { class: "field" }, h("span", {}, "Password"), password),
+      h("button", { class: "primary" }, "Sign in")));
+  username.focus();
 }
 
 // The hosted demo page cannot use path-style hashes, so it routes in memory.
@@ -163,7 +192,6 @@ async function showNew() {
   async function send() {
     await run(async () => {
       const form = new FormData();
-      form.append("actor", actor());
       form.append("representation", representation.value);
       files.forEach((f) => form.append("files", f));
       submit.disabled = true;
@@ -385,7 +413,16 @@ async function route() {
   }
 }
 
-try { actorInput.value = localStorage.getItem("declarant") || actorInput.value; } catch (_) {}
-actorInput.addEventListener("change", () => { try { localStorage.setItem("declarant", actorInput.value.trim()); } catch (_) {} });
-window.addEventListener("hashchange", route);
-route();
+async function boot() {
+  try {
+    user = await api("GET", "/api/me");
+  } catch (_) {
+    return; // the sign-in form is already showing
+  }
+  renderWho();
+  route();
+}
+
+window.addEventListener("hashchange", () => { if (user) route(); });
+if (!window.DEMO && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+boot();
