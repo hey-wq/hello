@@ -240,10 +240,98 @@ def test_claude_reader_request_shape():
     blocks = first["messages"][0]["content"]
     assert [b["type"] for b in blocks] == ["document", "image", "text"]
     assert blocks[0]["source"]["media_type"] == "application/pdf"
-    assert first["model"] == "claude-opus-5-5" and first["thinking"] == {"type": "adaptive"}
+    assert first["model"] == "claude-sonnet-5-5" and first["thinking"] == {"type": "adaptive"}
+    assert second["model"] == "claude-opus-5-5"  # codes always come from the stronger model
     assert "6109100010" in second["messages"][0]["content"][0]["text"]
+
+    reader.read([("invoice.pdf", b"%PDF-1.4")], strong=True)
+    assert calls[-1]["model"] == "claude-opus-5-5"
+
+    ClaudeReader(client=Client(), read_model="claude-haiku-5-5").read([("invoice.pdf", b"%PDF-1.4")])
+    assert calls[-1]["model"] == "claude-haiku-5-5" and "fallbacks" not in calls[-1]
 
 
 def test_unsupported_file_type_is_refused():
     with pytest.raises(ValueError):
         _document_block("invoice.docx", b"x")
+
+
+class TwoPassReader:
+    """Stands in for the model: a first reading and, if asked, a stronger one."""
+
+    read_model, strong_model = "cheap", "strong"
+
+    def __init__(self, first, second):
+        self.first, self.second, self.passes = first, second, []
+
+    def read(self, documents, strong=False):
+        self.passes.append("strong" if strong else "cheap")
+        return self.second if strong else self.first
+
+    def classify(self, extraction, history):
+        sample = json.loads((ROOT / "samples" / "sample_shipment.json").read_text())
+        return Classification.model_validate(sample["classification"])
+
+
+def clean_reading():
+    sample = json.loads((ROOT / "samples" / "sample_shipment.json").read_text())
+    extraction = Extraction.model_validate(sample["extraction"])
+    extraction.reading_notes = []
+    extraction.packing_list.lines[1].quantity = 4000  # agree with the invoice
+    return extraction
+
+
+def upload(tmp_path, reader):
+    client = TestClient(create_app(data_dir=tmp_path, reader=reader))
+    r = client.post("/api/shipments", data=ME, files=[("files", ("invoice.pdf", b"%PDF-1.4", "application/pdf"))])
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def read_event(view):
+    return next(e["payload"] for e in view["events"] if e["type"] == "documents_read")
+
+
+def test_clean_reading_is_not_read_twice(tmp_path):
+    reader = TwoPassReader(clean_reading(), clean_reading())
+    view = upload(tmp_path, reader)
+    assert reader.passes == ["cheap"]
+    assert read_event(view)["read_by"] == "cheap" and "reread_because" not in read_event(view)
+
+
+def test_misread_figure_sends_documents_to_the_stronger_model(tmp_path):
+    misread = clean_reading()
+    misread.invoice.lines[0].line_total = 2220.00  # a dropped digit: 12000 x 1.85 is 22200
+    view = upload(tmp_path, TwoPassReader(misread, clean_reading()))
+    event = read_event(view)
+    assert event["read_by"] == "strong" and event["first_read_by"] == "cheap"
+    assert any("does not add up" in reason for reason in event["reread_because"])
+    # The declaration is built from the second reading, and its flags are the second reading's.
+    assert view["shipment"]["declaration"]["items"][0]["invoice_value"] == 22200.00
+    assert "line_arithmetic:0" not in flag_ids(view)
+
+
+@pytest.mark.parametrize(
+    "spoil, expected",
+    [
+        (lambda e: setattr(e, "legibility", "poor"), "poor"),
+        (lambda e: e.reading_notes.append("Stamp covers the total."), "note"),
+        (lambda e: setattr(e.invoice, "currency", ""), "currency"),
+    ],
+)
+def test_other_reasons_to_read_again(tmp_path, spoil, expected):
+    first = clean_reading()
+    spoil(first)
+    reader = TwoPassReader(first, clean_reading())
+    view = upload(tmp_path, reader)
+    assert reader.passes == ["cheap", "strong"]
+    assert any(expected in reason for reason in read_event(view)["reread_because"])
+
+
+def test_no_second_pass_when_only_one_model_is_configured(tmp_path):
+    first = clean_reading()
+    first.legibility = "poor"
+    reader = TwoPassReader(first, clean_reading())
+    reader.strong_model = "cheap"
+    upload(tmp_path, reader)
+    assert reader.passes == ["cheap"]

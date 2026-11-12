@@ -11,7 +11,10 @@ anything with a customs authority.
 
 1. **Reads the documents.** Invoice and packing list (PDF or image) are sent
    to Claude, which transcribes them into structured data and notes anything
-   illegible or contradictory.
+   illegible or contradictory. A cheaper model reads first. The documents are
+   read again by the stronger model if the first reading reports doubt, is
+   missing a required field, or contains figures that do not add up. The
+   record shows which model read the documents and why.
 2. **Drafts the declaration.** Parties, terms, items, weights, and a customs
    value per item in euro (invoice value, plus freight and insurance
    apportioned by weight where the delivery term excludes them).
@@ -48,6 +51,10 @@ Settings (environment variables):
 |---|---|---|
 | `CUSTOMSDESK_DATA` | `./var` | Database and uploaded documents |
 | `CUSTOMSDESK_BENCHMARKS` | `data/benchmarks_sample.csv` | Reference unit values |
+| `CUSTOMSDESK_READ_MODEL` | `claude-sonnet-5-5` | First reading of the documents |
+| `CUSTOMSDESK_STRONG_MODEL` | `claude-opus-5-5` | Second reading when needed, and all code proposals |
+
+Set both model variables to the same value to switch the second reading off.
 
 Tests: `python -m pytest`
 

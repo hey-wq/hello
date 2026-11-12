@@ -138,6 +138,38 @@ def check_documents(extraction: Extraction) -> list[Flag]:
     return flags
 
 
+def escalation_reasons(extraction: Extraction) -> list[str]:
+    """Why a first reading should not be trusted and the documents read again.
+
+    Combines what the reader admitted (legibility, notes) with what can be
+    verified independently (required fields present, figures that add up),
+    because a reader that misreads a digit does not always know it did.
+    """
+    inv = extraction.invoice
+    reasons: list[str] = []
+    if extraction.legibility != "clear":
+        reasons.append(f"reader reported the documents as {extraction.legibility.replace('_', ' ')}")
+    if extraction.reading_notes:
+        reasons.append(f"reader left {len(extraction.reading_notes)} note(s) about unclear content")
+    missing = [
+        label
+        for label, value in (
+            ("invoice number", inv.number),
+            ("currency", inv.currency),
+            ("invoice total", inv.total),
+            ("buyer name", inv.buyer.name),
+            ("invoice lines", inv.lines),
+            ("packing list lines", extraction.packing_list.lines),
+        )
+        if not value
+    ]
+    if missing:
+        reasons.append("not found: " + ", ".join(missing))
+    inconsistent = sorted({f.title for f in check_documents(extraction) if f.severity != Severity.INFO})
+    reasons.extend(title[0].lower() + title[1:] for title in inconsistent)
+    return reasons
+
+
 # --------------------------------------------------------------------------
 # The declaration is complete enough to file
 # --------------------------------------------------------------------------

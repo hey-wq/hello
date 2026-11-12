@@ -320,7 +320,8 @@ function render(view) {
       case "code_proposed": return "Item " + (p.item + 1) + ": " + p.code + " (" + (CODE_SOURCES[p.source] || p.source).toLowerCase() + ")";
       case "code_confirmed": return "Item " + (p.item + 1) + ": " + p.code;
       case "document_received": return p.filename + " · sha256 " + p.sha256.slice(0, 12) + "…";
-      case "documents_read": return "Invoice " + p.invoice_number + ", " + p.lines + " lines, " + money(p.declared_total) + " " + p.currency;
+      case "documents_read": return "Invoice " + p.invoice_number + ", " + p.lines + " lines, " + money(p.declared_total) + " " + p.currency
+        + (p.reread_because ? ". Read a second time by the stronger model because: " + p.reread_because.join("; ") + "." : "");
       case "declaration_approved": return p.items + " items, customs value € " + money(p.customs_value_eur);
       case "job_declined": return p.reason;
       case "shipment_opened": return "Acting as " + p.representation + " representative";

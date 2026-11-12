@@ -9,11 +9,16 @@ treated as final until a declarant confirms it.
 from __future__ import annotations
 
 import base64
+import os
 from typing import Protocol
 
 from .models import Classification, Extraction
 
-MODEL = "claude-opus-5-5"
+# Documents are read by the cheaper model first. If that reading looks unreliable
+# (see ``escalation_reasons``) they are read again by the stronger one. Commodity
+# codes are always proposed by the stronger model.
+READ_MODEL = os.environ.get("CUSTOMSDESK_READ_MODEL", "claude-sonnet-5-5")
+STRONG_MODEL = os.environ.get("CUSTOMSDESK_STRONG_MODEL", "claude-opus-5-5")
 
 MEDIA_TYPES = {
     ".pdf": "application/pdf",
@@ -30,6 +35,9 @@ declared, so accuracy matters more than completeness.
 
 Transcribe what the documents say. Do not infer, correct or complete values: \
 if a field is absent or illegible, leave it empty and say so in reading_notes. \
+Set legibility honestly: if you were unsure of any digit, name or code, do not \
+report "clear". A second reader checks documents you mark as unclear, so \
+admitting doubt costs nothing and a confident misreading costs the broker. \
 If the invoice and the packing list disagree, record each document's own \
 figures as written and describe the disagreement in reading_notes. Amounts are \
 plain numbers in the invoice currency, without thousands separators. \
@@ -53,7 +61,10 @@ are supplied, prefer them when the goods are the same."""
 
 
 class Reader(Protocol):
-    def read(self, documents: list[tuple[str, bytes]]) -> Extraction: ...
+    read_model: str
+    strong_model: str
+
+    def read(self, documents: list[tuple[str, bytes]], strong: bool = False) -> Extraction: ...
 
     def classify(self, extraction: Extraction, history: dict[str, str]) -> Classification: ...
 
@@ -73,32 +84,35 @@ def _document_block(filename: str, data: bytes) -> dict:
 
 
 class ClaudeReader:
-    def __init__(self, client=None):
+    def __init__(self, client=None, read_model: str = READ_MODEL, strong_model: str = STRONG_MODEL):
         if client is None:
             import anthropic
 
             client = anthropic.Anthropic()
         self.client = client
+        self.read_model = read_model
+        self.strong_model = strong_model
 
-    def _parse(self, system: str, content: list[dict], schema):
-        response = self.client.beta.messages.parse(
-            model=MODEL,
+    def _parse(self, model: str, system: str, content: list[dict], schema):
+        request = dict(
+            model=model,
             max_tokens=16000,
             system=system,
             thinking={"type": "adaptive"},
             output_config={"effort": "high"},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
             messages=[{"role": "user", "content": content}],
             output_format=schema,
         )
+        if "haiku" not in model:  # Haiku has no server-side refusal fallback
+            request.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        response = self.client.beta.messages.parse(**request)
         if response.stop_reason == "refusal":
             raise RuntimeError("The model declined to process these documents.")
         if response.stop_reason == "max_tokens" or response.parsed_output is None:
             raise RuntimeError("The model's answer was cut off; the documents may be too long.")
         return response.parsed_output
 
-    def read(self, documents: list[tuple[str, bytes]]) -> Extraction:
+    def read(self, documents: list[tuple[str, bytes]], strong: bool = False) -> Extraction:
         content = [_document_block(name, data) for name, data in documents]
         content.append(
             {
@@ -107,7 +121,8 @@ class ClaudeReader:
                 "Transcribe them into the schema.",
             }
         )
-        return self._parse(EXTRACT_SYSTEM, content, Extraction)
+        model = self.strong_model if strong else self.read_model
+        return self._parse(model, EXTRACT_SYSTEM, content, Extraction)
 
     def classify(self, extraction: Extraction, history: dict[str, str]) -> Classification:
         inv = extraction.invoice
@@ -125,13 +140,15 @@ class ClaudeReader:
             f"Codes this broker has previously confirmed for this importer:\n{known}\n\n"
             "Suggest one commodity code per line."
         )
-        return self._parse(CLASSIFY_SYSTEM, [{"type": "text", "text": text}], Classification)
+        return self._parse(self.strong_model, CLASSIFY_SYSTEM, [{"type": "text", "text": text}], Classification)
 
 
 class NoReader:
     """Used when no API credentials are configured."""
 
-    def read(self, documents):
+    read_model = strong_model = ""
+
+    def read(self, documents, strong=False):
         raise ReaderNotConfigured(
             "Document reading is not configured. Set ANTHROPIC_API_KEY and restart, "
             "or load the sample shipment."

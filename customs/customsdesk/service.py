@@ -58,9 +58,18 @@ class Desk:
         actor: str,
     ) -> Shipment:
         extraction = self.reader.read(documents)
+        reading = {"read_by": self.reader.read_model}
+        reasons = checks.escalation_reasons(extraction)
+        if reasons and self.reader.strong_model != self.reader.read_model:
+            extraction = self.reader.read(documents, strong=True)
+            reading = {
+                "read_by": self.reader.strong_model,
+                "first_read_by": self.reader.read_model,
+                "reread_because": reasons,
+            }
         key = importer_key(extraction.invoice.buyer)
         classification = self.reader.classify(extraction, self.store.confirmed_codes(key))
-        return self.open(extraction, classification, representation, actor, documents)
+        return self.open(extraction, classification, representation, actor, documents, reading)
 
     def open(
         self,
@@ -69,6 +78,7 @@ class Desk:
         representation: Representation,
         actor: str,
         documents: list[tuple[str, bytes]] = (),
+        reading: Optional[dict] = None,
     ) -> Shipment:
         shipment_id = uuid.uuid4().hex[:12]
         key = importer_key(extraction.invoice.buyer)
@@ -89,6 +99,8 @@ class Desk:
             lines=len(extraction.invoice.lines),
             declared_total=extraction.invoice.total,
             currency=extraction.invoice.currency,
+            legibility=extraction.legibility,
+            **(reading or {}),
         )
         for i, item in enumerate(declaration.items):
             if item.commodity_code:

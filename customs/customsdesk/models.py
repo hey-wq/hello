@@ -75,6 +75,11 @@ class PackingList(BaseModel):
 class Extraction(BaseModel):
     invoice: Invoice
     packing_list: PackingList
+    legibility: Literal["clear", "partly_unclear", "poor"] = Field(
+        "clear",
+        description="How confidently the documents could be read. Anything other than 'clear' "
+        "if any figure, name or code was guessed, faint, cut off, handwritten or obscured.",
+    )
     reading_notes: list[str] = Field(
         default_factory=list,
         description="Anything illegible, ambiguous or contradictory in the documents",
