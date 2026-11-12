@@ -1,0 +1,40 @@
+{
+  "extraction": {
+    "invoice": {
+      "number": "NB-2026-0417",
+      "date": "2026-10-21",
+      "seller": {"name": "Example Garment Trading Co. Ltd", "address": "88 Sample Road, Ningbo", "country": "CN", "vat_number": "", "eori": ""},
+      "buyer": {"name": "Paradeigma Eisagogiki IKE", "address": "Odos Deigmatos 12, Peiraias", "country": "GR", "vat_number": "EL000000000", "eori": ""},
+      "currency": "USD",
+      "incoterm": "FOB",
+      "incoterm_place": "Ningbo",
+      "lines": [
+        {"description": "Men's cotton T-shirts, knitted, 100% cotton", "quantity": 12000, "unit": "PCS", "unit_price": 1.85, "line_total": 22200.00, "origin_country": "CN", "hs_code_on_document": "610910"},
+        {"description": "Men's denim trousers, woven, cotton", "quantity": 4000, "unit": "PCS", "unit_price": 0.90, "line_total": 3600.00, "origin_country": "CN", "hs_code_on_document": "620342"},
+        {"description": "Sports shoes, textile upper, rubber sole", "quantity": 2400, "unit": "PRS", "unit_price": 6.40, "line_total": 15360.00, "origin_country": "CN", "hs_code_on_document": ""}
+      ],
+      "total": 41160.00,
+      "freight": null,
+      "insurance": null
+    },
+    "packing_list": {
+      "number": "NB-2026-0417-PL",
+      "lines": [
+        {"description": "Men's cotton T-shirts", "quantity": 12000, "packages": 200, "package_type": "CARTONS", "gross_kg": 2040, "net_kg": 1920},
+        {"description": "Men's denim trousers", "quantity": 4200, "packages": 140, "package_type": "CARTONS", "gross_kg": 2660, "net_kg": 2520},
+        {"description": "Sports shoes", "quantity": 2400, "packages": 100, "package_type": "CARTONS", "gross_kg": 1750, "net_kg": 1560}
+      ],
+      "total_packages": 440,
+      "total_gross_kg": 6450,
+      "total_net_kg": 6000
+    },
+    "reading_notes": ["The buyer's EORI number does not appear on either document."]
+  },
+  "classification": {
+    "suggestions": [
+      {"line_index": 0, "commodity_code": "6109100010", "reasoning": "T-shirts, knitted, of cotton fall in heading 6109, subheading 6109 10. The description states knitted and 100% cotton, which are the two facts this heading depends on.", "confidence": "high", "alternatives": []},
+      {"line_index": 1, "commodity_code": "62034231", "reasoning": "Men's trousers, woven, of cotton denim fall in heading 6203, subheading 6203 42 31. The TARIC subdivision is not determined by the description.", "confidence": "medium", "alternatives": ["62034235"]},
+      {"line_index": 2, "commodity_code": "64041100", "reasoning": "Footwear with rubber outer soles and textile uppers is heading 6404; sports footwear is 6404 11. The description does not say whether these meet the sports-footwear definition, so 6404 19 90 is the alternative.", "confidence": "low", "alternatives": ["64041990"]}
+    ]
+  }
+}
