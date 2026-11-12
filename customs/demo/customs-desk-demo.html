@@ -1,0 +1,922 @@
+<title>Customs Desk Demo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --ink: #16181d;
+  --muted: #646a76;
+  --line: #e1dfd9;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --ok: #17794a;
+  --ok-bg: #e5f4ec;
+  --warn: #8a5a00;
+  --warn-bg: #fdf1d4;
+  --high: #a8261d;
+  --high-bg: #fbe6e3;
+  --info-bg: #eceef2;
+  --radius: 8px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121317;
+    --surface: #1b1d23;
+    --ink: #eceef2;
+    --muted: #9aa1ae;
+    --line: #2d3039;
+    --accent: #7ea2ff;
+    --accent-ink: #0c1020;
+    --ok: #6fd3a0;
+    --ok-bg: #173327;
+    --warn: #f0c060;
+    --warn-bg: #3a2e12;
+    --high: #ff9a90;
+    --high-bg: #42201d;
+    --info-bg: #262931;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121317; --surface: #1b1d23; --ink: #eceef2; --muted: #9aa1ae; --line: #2d3039;
+  --accent: #7ea2ff; --accent-ink: #0c1020; --ok: #6fd3a0; --ok-bg: #173327;
+  --warn: #f0c060; --warn-bg: #3a2e12; --high: #ff9a90; --high-bg: #42201d; --info-bg: #262931;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+h2 { font-size: 13px; margin: 0 0 12px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+p { margin: 0 0 8px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding-block: 12px; background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+}
+.brand { font-weight: 700; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+.who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.who input { width: 180px; max-width: 42vw; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+
+main {
+  max-width: 1180px; margin: 0 auto; padding-block: 28px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1 { text-wrap: balance; }
+.decline textarea { margin-bottom: 12px; }
+.demo-note { background: var(--info-bg); color: var(--muted); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.head .sub { color: var(--muted); margin-top: 4px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.scroll { overflow-x: auto; }
+
+button, .button {
+  font: inherit; font-weight: 550; padding: 7px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; display: inline-block;
+}
+button:hover, .button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.danger { color: var(--high); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.small { padding: 3px 9px; font-size: 12.5px; }
+
+input, select, textarea {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%;
+}
+input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+textarea { min-height: 64px; resize: vertical; }
+input[readonly], input:disabled, select:disabled { background: transparent; border-color: transparent; padding-left: 0; }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px 16px; }
+.field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.field.static div { padding: 6px 0; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 10px 8px 0; white-space: nowrap; }
+td { padding: 10px 10px 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+th.num, td.num { padding-right: 14px; }
+tr.link { cursor: pointer; }
+tr.link:hover td { background: var(--info-bg); }
+td input { min-width: 64px; }
+td.code input { width: 124px; font-family: var(--mono); }
+td.origin input { width: 56px; }
+td.weight input { width: 92px; text-align: right; }
+.reason { font-size: 12.5px; color: var(--muted); margin-top: 6px; max-width: 420px; }
+.below { color: var(--high); font-weight: 600; }
+
+.chip { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--info-bg); color: var(--muted); white-space: nowrap; }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.warning { background: var(--warn-bg); color: var(--warn); }
+.chip.high { background: var(--high-bg); color: var(--high); }
+
+.gate { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; background: var(--warn-bg); color: var(--warn); font-weight: 550; }
+.gate.ready, .gate.approved { background: var(--ok-bg); color: var(--ok); }
+.gate.declined { background: var(--high-bg); color: var(--high); }
+
+.flag { border-top: 1px solid var(--line); padding: 14px 0; }
+.flag:first-of-type { border-top: 0; padding-top: 0; }
+.flag .title { font-weight: 600; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.flag .detail { color: var(--muted); margin: 4px 0 0; max-width: 760px; }
+.flag form { display: grid; grid-template-columns: 270px 1fr auto; gap: 8px; margin-top: 10px; align-items: start; }
+.flag .done { margin-top: 8px; font-size: 13px; }
+@media (max-width: 720px) { .flag form { grid-template-columns: 1fr; } }
+
+.timeline { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.timeline li { display: grid; grid-template-columns: 150px 130px 1fr; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.timeline li:first-child { border-top: 0; }
+@media (max-width: 720px) { .timeline li { grid-template-columns: 1fr; gap: 0; } }
+
+.drop { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 28px; text-align: center; color: var(--muted); margin-bottom: 14px; }
+.drop.over { border-color: var(--accent); color: var(--accent); }
+.drop input { display: none; }
+.files { list-style: none; padding: 0; margin: 10px 0 0; color: var(--ink); }
+.notice { background: var(--info-bg); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; color: var(--muted); }
+.empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+
+/* Phone: each item becomes a stacked block with labelled rows. */
+@media (max-width: 720px) {
+  .card { padding: 16px; }
+  table.items thead { display: none; }
+  table.items, table.items tbody, table.items tr, table.items td { display: block; width: 100%; }
+  table.items tr { border-top: 1px solid var(--line); padding: 14px 0; }
+  table.items tr:first-child { border-top: 0; padding-top: 0; }
+  table.items td { border: 0; padding: 4px 0; text-align: left; }
+  table.items td.idx { display: none; }
+  table.items td.goods { font-weight: 600; }
+  table.items td.goods .muted { font-weight: 400; }
+  table.items td[data-label] { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; align-items: start; }
+  table.items td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 12px; padding-top: 2px; }
+  table.items td.code { display: block; }
+  table.items td.code::before { display: block; margin-bottom: 4px; }
+  table.items td.code input { width: 100%; max-width: 220px; }
+  table.items td.weight input { text-align: left; }
+  .reason { max-width: none; }
+  .fields { grid-template-columns: 1fr 1fr; }
+}
+
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; max-width: min(560px, 92vw); z-index: 10; }
+
+</style>
+
+<header class="bar">
+  <span class="brand">Customs desk</span>
+  <label class="who">
+    <span>Declarant</span>
+    <input id="actor" type="text" placeholder="Your name" autocomplete="name" maxlength="80" value="Demo declarant">
+  </label>
+</header>
+<main>
+  <div class="demo-note">Demo on a made-up shipment. Nothing is saved or sent, and reloading starts again.
+  Try it: enter an exchange rate (1.08), freight (2800) and an EORI (GR000000000), complete the two short
+  commodity codes to 10 digits, then resolve the flags, confirm the codes and approve.</div>
+  <div id="app"></div>
+</main>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+window.DEMO = true;
+window.DEMO_DATA = {"sample": {"extraction": {"invoice": {"number": "NB-2026-0417", "date": "2026-10-21", "seller": {"name": "Example Garment Trading Co. Ltd", "address": "88 Sample Road, Ningbo", "country": "CN", "vat_number": "", "eori": ""}, "buyer": {"name": "Paradeigma Eisagogiki IKE", "address": "Odos Deigmatos 12, Peiraias", "country": "GR", "vat_number": "EL000000000", "eori": ""}, "currency": "USD", "incoterm": "FOB", "incoterm_place": "Ningbo", "lines": [{"description": "Men's cotton T-shirts, knitted, 100% cotton", "quantity": 12000, "unit": "PCS", "unit_price": 1.85, "line_total": 22200.0, "origin_country": "CN", "hs_code_on_document": "610910"}, {"description": "Men's denim trousers, woven, cotton", "quantity": 4000, "unit": "PCS", "unit_price": 0.9, "line_total": 3600.0, "origin_country": "CN", "hs_code_on_document": "620342"}, {"description": "Sports shoes, textile upper, rubber sole", "quantity": 2400, "unit": "PRS", "unit_price": 6.4, "line_total": 15360.0, "origin_country": "CN", "hs_code_on_document": ""}], "total": 41160.0, "freight": null, "insurance": null}, "packing_list": {"number": "NB-2026-0417-PL", "lines": [{"description": "Men's cotton T-shirts", "quantity": 12000, "packages": 200, "package_type": "CARTONS", "gross_kg": 2040, "net_kg": 1920}, {"description": "Men's denim trousers", "quantity": 4200, "packages": 140, "package_type": "CARTONS", "gross_kg": 2660, "net_kg": 2520}, {"description": "Sports shoes", "quantity": 2400, "packages": 100, "package_type": "CARTONS", "gross_kg": 1750, "net_kg": 1560}], "total_packages": 440, "total_gross_kg": 6450, "total_net_kg": 6000}, "reading_notes": ["The buyer's EORI number does not appear on either document."]}, "classification": {"suggestions": [{"line_index": 0, "commodity_code": "6109100010", "reasoning": "T-shirts, knitted, of cotton fall in heading 6109, subheading 6109 10. The description states knitted and 100% cotton, which are the two facts this heading depends on.", "confidence": "high", "alternatives": []}, {"line_index": 1, "commodity_code": "62034231", "reasoning": "Men's trousers, woven, of cotton denim fall in heading 6203, subheading 6203 42 31. The TARIC subdivision is not determined by the description.", "confidence": "medium", "alternatives": ["62034235"]}, {"line_index": 2, "commodity_code": "64041100", "reasoning": "Footwear with rubber outer soles and textile uppers is heading 6404; sports footwear is 6404 11. The description does not say whether these meet the sports-footwear definition, so 6404 19 90 is the alternative.", "confidence": "low", "alternatives": ["64041990"]}]}}, "benchmarks": [{"code": "61091000", "origin": "CN", "median": 14.5, "low": 6.0, "source": "SAMPLE FIGURES - not real statistics", "period": "n/a"}, {"code": "62034231", "origin": "CN", "median": 16.0, "low": 7.0, "source": "SAMPLE FIGURES - not real statistics", "period": "n/a"}, {"code": "64041100", "origin": "CN", "median": 19.0, "low": 8.5, "source": "SAMPLE FIGURES - not real statistics", "period": "n/a"}, {"code": "420292", "origin": "CN", "median": 11.0, "low": 4.5, "source": "SAMPLE FIGURES - not real statistics", "period": "n/a"}]};
+</script>
+<script>
+"use strict";
+// In-browser stand-in for the Python server, for the hosted demo page only.
+// It mirrors customsdesk/{declaration,checks,service}.py closely enough that
+// the review screen behaves the same on the sample shipment. Nothing is saved
+// or sent. demo/parity.py checks it against the real server.
+
+(function () {
+  const SAMPLE = window.DEMO_DATA.sample;
+  const BENCHMARKS = window.DEMO_DATA.benchmarks;
+  const EXCLUDING_FREIGHT = ["EXW", "FCA", "FAS", "FOB"];
+  const shipments = new Map();
+  const events = new Map();
+  let counter = 0;
+
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const digits = (s) => String(s || "").replace(/\D/g, "");
+  const normalise = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const close = (a, b) => Math.abs(a - b) <= Math.max(0.01, 0.005 * Math.max(Math.abs(a), Math.abs(b)));
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const g = (n) => String(Number(n));
+  const importerKey = (p) => (p.vat_number || p.eori || "").replace(/\s/g, "").toUpperCase() || normalise(p.name);
+
+  class Refused extends Error {}
+
+  function log(id, actor, type, payload) {
+    events.get(id).push({ seq: events.get(id).length + 1, at: new Date().toISOString(), actor, type, payload, prev_hash: "", hash: "" });
+  }
+
+  function flag(check, severity, title, detail, itemIndex, evidence) {
+    const has = itemIndex !== null && itemIndex !== undefined;
+    return { id: check + (has ? ":" + itemIndex : ""), check, severity, title, detail, item_index: has ? itemIndex : null, evidence: evidence || {}, resolution: null, resolution_note: "", resolved_by: "" };
+  }
+
+  // ---- declaration.py ------------------------------------------------------
+
+  function build(extraction, classification, history) {
+    const inv = extraction.invoice, pl = extraction.packing_list;
+    const suggestions = {};
+    classification.suggestions.forEach((s) => (suggestions[s.line_index] = s));
+    const items = inv.lines.map((line, i) => {
+      const p = pl.lines[i];
+      const item = {
+        description: line.description, quantity: line.quantity, unit: line.unit, origin_country: line.origin_country.toUpperCase(),
+        packages: p ? p.packages : 0, package_type: p ? p.package_type : "", gross_kg: p ? p.gross_kg : 0, net_kg: p ? p.net_kg : 0,
+        invoice_value: line.line_total, customs_value_eur: null, commodity_code: "", code_source: "", code_reasoning: "",
+        code_confidence: "", code_alternatives: [], code_confirmed: false,
+      };
+      const known = history[normalise(line.description)], s = suggestions[i];
+      if (known) Object.assign(item, { commodity_code: known, code_source: "history", code_confidence: "high", code_reasoning: "Previously confirmed by this office for the same importer and description." });
+      else if (s) Object.assign(item, { commodity_code: digits(s.commodity_code), code_source: "suggested", code_reasoning: s.reasoning, code_confidence: s.confidence, code_alternatives: s.alternatives.map(digits) });
+      return item;
+    });
+    return {
+      procedure: "4000", representation: "direct", importer: clone(inv.buyer), exporter: clone(inv.seller),
+      invoice_number: inv.number, invoice_date: inv.date, currency: inv.currency.toUpperCase(), exchange_rate: null,
+      incoterm: inv.incoterm.toUpperCase(), incoterm_place: inv.incoterm_place, invoice_total: inv.total,
+      freight: inv.freight, insurance: inv.insurance, total_packages: pl.total_packages,
+      total_gross_kg: pl.total_gross_kg, total_net_kg: pl.total_net_kg, items,
+    };
+  }
+
+  function computeValues(d) {
+    const rate = d.currency === "EUR" ? 1 : d.exchange_rate;
+    const extra = EXCLUDING_FREIGHT.includes(d.incoterm) ? (d.freight || 0) + (d.insurance || 0) : 0;
+    const totalGross = d.items.reduce((sum, it) => sum + it.gross_kg, 0);
+    d.items.forEach((it) => {
+      if (!rate) { it.customs_value_eur = null; return; }
+      const share = totalGross ? it.gross_kg / totalGross : 1 / d.items.length;
+      it.customs_value_eur = round2((it.invoice_value + extra * share) / rate);
+    });
+  }
+
+  // ---- checks.py -----------------------------------------------------------
+
+  function checkDocuments(x) {
+    const inv = x.invoice, pl = x.packing_list, out = [];
+    x.reading_notes.forEach((note, n) => out.push(flag("reading_note_" + n, "info", "Note from document reading", note)));
+    if (inv.lines.length !== pl.lines.length)
+      out.push(flag("line_count", "warning", "Invoice and packing list have different numbers of lines",
+        `The invoice has ${inv.lines.length} lines and the packing list has ${pl.lines.length}. Weights and packages were matched by position and may be against the wrong goods.`,
+        null, { invoice_lines: inv.lines.length, packing_lines: pl.lines.length }));
+    inv.lines.forEach((line, i) => {
+      const expected = line.quantity * line.unit_price;
+      if (line.unit_price && !close(expected, line.line_total))
+        out.push(flag("line_arithmetic", "warning", "Invoice line does not add up",
+          `${g(line.quantity)} × ${g(line.unit_price)} = ${expected.toFixed(2)}, but the line total reads ${line.line_total.toFixed(2)}.`,
+          i, { expected: round2(expected), stated: line.line_total }));
+      if (i < pl.lines.length && !close(line.quantity, pl.lines[i].quantity))
+        out.push(flag("quantity_mismatch", "warning", "Quantity differs between invoice and packing list",
+          `Invoice: ${g(line.quantity)}. Packing list: ${g(pl.lines[i].quantity)}.`, i, { invoice: line.quantity, packing_list: pl.lines[i].quantity }));
+    });
+    const linesSum = inv.lines.reduce((s, l) => s + l.line_total, 0);
+    const goods = inv.total - (inv.freight || 0) - (inv.insurance || 0);
+    if (inv.lines.length && !(close(linesSum, inv.total) || close(linesSum, goods)))
+      out.push(flag("invoice_total", "warning", "Invoice total does not match its lines",
+        `The lines add up to ${linesSum.toFixed(2)}; the invoice total reads ${inv.total.toFixed(2)}.`, null, { lines_sum: round2(linesSum), stated: inv.total }));
+    pl.lines.forEach((p, i) => {
+      if (p.gross_kg > 0 && p.net_kg > p.gross_kg)
+        out.push(flag("net_over_gross", "warning", "Net weight exceeds gross weight", `Net ${g(p.net_kg)} kg, gross ${g(p.gross_kg)} kg.`, i, { net_kg: p.net_kg, gross_kg: p.gross_kg }));
+    });
+    [["gross weight", pl.total_gross_kg, "gross_kg"], ["net weight", pl.total_net_kg, "net_kg"], ["packages", pl.total_packages, "packages"]].forEach(([label, stated, key]) => {
+      const summed = pl.lines.reduce((s, p) => s + p[key], 0);
+      if (stated && summed && !close(stated, summed))
+        out.push(flag("packing_total_" + label.replace(" ", "_"), "warning", `Packing list total ${label} does not match its lines`,
+          `The lines add up to ${g(summed)}; the total reads ${g(stated)}.`, null, { lines_sum: summed, stated }));
+    });
+    return out;
+  }
+
+  function checkCompleteness(d) {
+    const out = [];
+    if (!d.currency) out.push(flag("currency_missing", "warning", "Invoice currency not found", "Enter the currency."));
+    else if (d.currency !== "EUR" && !d.exchange_rate)
+      out.push(flag("exchange_rate_missing", "warning", "Exchange rate needed",
+        `The invoice is in ${d.currency}. Enter the official customs exchange rate so customs values can be calculated in euro.`, null, { currency: d.currency }));
+    if (!d.incoterm) out.push(flag("incoterm_missing", "warning", "Delivery terms not found", "Without the delivery terms it is unclear whether freight is included in the price."));
+    else if (EXCLUDING_FREIGHT.includes(d.incoterm) && d.freight === null)
+      out.push(flag("freight_missing", "warning", "Freight cost needed",
+        `Under ${d.incoterm} the invoice price excludes transport to the EU border. Enter the freight (and insurance, if any) so it can be added to the customs value.`, null, { incoterm: d.incoterm }));
+    if (!d.importer.eori) out.push(flag("importer_eori_missing", "warning", "Importer EORI number missing", "Enter the importer's EORI."));
+    else if (!/^[A-Z]{2}[A-Z0-9]{1,15}$/.test(d.importer.eori.replace(/ /g, "").toUpperCase()))
+      out.push(flag("importer_eori_format", "warning", "Importer EORI number is not in a valid format",
+        `“${d.importer.eori}” should be a two-letter country code followed by up to 15 characters.`, null, { eori: d.importer.eori }));
+    d.items.forEach((it, i) => {
+      if (!it.origin_country) out.push(flag("origin_missing", "warning", "Country of origin not stated", "Enter the origin.", i));
+      if (!it.net_kg) out.push(flag("net_weight_missing", "warning", "Net weight missing", "Enter the net weight.", i));
+      if (!it.commodity_code) out.push(flag("code_missing", "warning", "No commodity code", "Enter the commodity code.", i));
+      else if (it.commodity_code.length !== 10)
+        out.push(flag("code_length", "warning", "Commodity code is not 10 digits",
+          `“${it.commodity_code}” has ${it.commodity_code.length} digits. An import declaration needs the full 10-digit TARIC code; look up the subdivision and complete it.`, i, { code: it.commodity_code }));
+    });
+    return out;
+  }
+
+  function lookup(code, origin) {
+    for (const length of [8, 6]) {
+      const hit = BENCHMARKS.find((b) => b.code === code.slice(0, length) && b.origin === origin);
+      if (hit && code.length >= length) return hit;
+    }
+    return null;
+  }
+
+  function checkValuation(d) {
+    const out = [];
+    d.items.forEach((it, i) => {
+      if (!(it.customs_value_eur && it.net_kg && it.commodity_code && it.origin_country)) return;
+      const unit = it.customs_value_eur / it.net_kg, ref = lookup(it.commodity_code, it.origin_country);
+      if (ref && unit < ref.low)
+        out.push(flag("value_below_reference", unit < 0.5 * ref.low ? "high" : "warning", "Declared value is below the reference range",
+          `€${unit.toFixed(2)} per kg declared. The reference for code ${ref.code} from ${ref.origin} is €${ref.median.toFixed(2)} per kg, with a low mark of €${ref.low.toFixed(2)} (${ref.source}, ${ref.period}). Ask the importer for proof of the price paid.`,
+          i, { declared_eur_per_kg: round2(unit), reference_median: ref.median, reference_low: ref.low, source: ref.source, period: ref.period }));
+    });
+    return out;
+  }
+
+  function checkTrader(d, known, valueFlags) {
+    const out = [], vat = d.importer.vat_number.replace(/ /g, "").toUpperCase();
+    if (vat) out.push(flag("vat_unchecked", "info", "Importer VAT number was not checked against VIES", "Online validation is switched off or the service did not answer.", null, { vat }));
+    if (!known)
+      out.push(valueFlags
+        ? flag("new_importer_low_value", "high", "First shipment for this importer, with a low declared value",
+            "This office has no approved declarations for this importer, and at least one item is below the reference range. Consider acting as direct representative, taking a guarantee, or declining the job.")
+        : flag("new_importer", "info", "First shipment for this importer",
+            "This office has no approved declarations for this importer. Check the mandate, company registration and who is behind the company."));
+    return out;
+  }
+
+  // ---- service.py ----------------------------------------------------------
+
+  const approvedFor = (key, excluding) => [...shipments.values()].some((s) => s.status === "approved" && s.id !== excluding && importerKey(s.declaration.importer) === key);
+
+  function recheck(s) {
+    const d = s.declaration;
+    computeValues(d);
+    const value = checkValuation(d);
+    const fresh = checkDocuments(s.extraction).concat(checkCompleteness(d), value, checkTrader(d, approvedFor(importerKey(d.importer), s.id), value.length > 0));
+    const before = {};
+    s.flags.forEach((f) => (before[f.id] = f));
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    fresh.forEach((f) => {
+      const old = before[f.id];
+      if (old && old.resolution && same(old.evidence, f.evidence)) Object.assign(f, { resolution: old.resolution, resolution_note: old.resolution_note, resolved_by: old.resolved_by });
+      if (!old || !same(old.evidence, f.evidence)) log(s.id, "system", "flag_raised", { flag: f.id, severity: f.severity, title: f.title, detail: f.detail, evidence: f.evidence });
+    });
+    const after = new Set(fresh.map((f) => f.id));
+    Object.keys(before).forEach((id) => { if (!after.has(id)) log(s.id, "system", "flag_cleared", { flag: id, title: before[id].title }); });
+    s.flags = fresh;
+  }
+
+  function open(actor, id) {
+    counter += 1;
+    id = id || "demo" + counter;
+    const extraction = clone(SAMPLE.extraction);
+    const history = {};
+    const key = importerKey(extraction.invoice.buyer);
+    shipments.forEach((s) => {
+      if (s.status === "approved" && importerKey(s.declaration.importer) === key)
+        s.declaration.items.forEach((it) => (history[normalise(it.description)] = it.commodity_code));
+    });
+    const s = { id, created_at: new Date().toISOString(), status: "draft", extraction, declaration: build(extraction, SAMPLE.classification, history), flags: [], approved_by: "", decline_reason: "" };
+    shipments.set(id, s);
+    events.set(id, []);
+    log(id, actor, "shipment_opened", { representation: "direct" });
+    log(id, "system", "documents_read", { invoice_number: extraction.invoice.number, lines: extraction.invoice.lines.length, declared_total: extraction.invoice.total, currency: extraction.invoice.currency });
+    s.declaration.items.forEach((it, i) => { if (it.commodity_code) log(id, "system", "code_proposed", { item: i, code: it.commodity_code, source: it.code_source, confidence: it.code_confidence }); });
+    recheck(s);
+    return s;
+  }
+
+  function editable(id) {
+    const s = shipments.get(id);
+    if (!s) throw new Refused("Shipment not found.");
+    if (s.status !== "draft") throw new Refused(`This shipment is ${s.status} and can no longer be changed.`);
+    return s;
+  }
+
+  const NUMERIC = ["exchange_rate", "freight", "insurance", "quantity", "packages", "gross_kg", "net_kg"];
+  const UPPER = ["currency", "incoterm", "origin_country", "country"];
+  const HEADER = ["currency", "exchange_rate", "incoterm", "incoterm_place", "freight", "insurance", "representation"];
+  const IMPORTER = ["name", "vat_number", "eori", "country", "address"];
+  const ITEM = ["description", "quantity", "unit", "origin_country", "packages", "gross_kg", "net_kg", "commodity_code"];
+
+  function edit(id, body) {
+    const s = editable(id), d = s.declaration, changes = [];
+    const apply = (target, field, value, label, allowed) => {
+      if (!allowed.includes(field)) throw new Refused(`“${field}” cannot be edited.`);
+      if (field === "commodity_code") value = digits(value);
+      if (UPPER.includes(field) && typeof value === "string") value = value.trim().toUpperCase();
+      if (NUMERIC.includes(field) && value !== null) {
+        if (typeof value !== "number" || !isFinite(value)) throw new Refused(`Invalid value for ${label}: enter a number.`);
+      }
+      if (field === "representation" && !["direct", "indirect"].includes(value)) throw new Refused("Invalid value for representation.");
+      if (target[field] !== value) { changes.push({ field: label, old: target[field], new: value }); target[field] = value; }
+    };
+    Object.entries(body.header || {}).forEach(([f, v]) => apply(d, f, v, f, HEADER));
+    Object.entries(body.importer || {}).forEach(([f, v]) => apply(d.importer, f, v, "importer." + f, IMPORTER));
+    Object.entries(body.items || {}).forEach(([index, fields]) => {
+      const item = d.items[Number(index)];
+      if (!item) throw new Refused(`There is no item ${Number(index) + 1}.`);
+      Object.entries(fields).forEach(([f, v]) => {
+        const codeBefore = item.commodity_code;
+        apply(item, f, v, `item ${Number(index) + 1}.${f}`, ITEM);
+        if (f === "commodity_code" && item.commodity_code !== codeBefore) {
+          if (!(codeBefore && item.commodity_code.startsWith(codeBefore))) Object.assign(item, { code_source: "declarant", code_reasoning: "", code_confidence: "", code_alternatives: [] });
+          item.code_confirmed = false;
+        }
+      });
+    });
+    changes.forEach((c) => log(id, body.actor, "field_changed", c));
+    recheck(s);
+    return s;
+  }
+
+  function confirm(id, index, actor) {
+    const s = editable(id), item = s.declaration.items[index];
+    if (!item) throw new Refused(`There is no item ${index + 1}.`);
+    if (item.commodity_code.length !== 10) throw new Refused("Complete the 10-digit commodity code before confirming it.");
+    item.code_confirmed = true;
+    log(id, actor, "code_confirmed", { item: index, code: item.commodity_code, source: item.code_source });
+    return s;
+  }
+
+  function resolve(id, flagId, body) {
+    const s = editable(id), f = s.flags.find((x) => x.id === flagId);
+    if (!f) throw new Refused("That flag no longer exists.");
+    if (f.severity === "info") throw new Refused("Information notes do not need resolving.");
+    const note = (body.note || "").trim();
+    if (note.length < 10) throw new Refused("Describe what was checked or received, in a sentence or more.");
+    Object.assign(f, { resolution: body.resolution, resolution_note: note, resolved_by: body.actor });
+    log(id, body.actor, "flag_resolved", { flag: flagId, title: f.title, resolution: body.resolution, note });
+    return s;
+  }
+
+  const blocking = (s) => s.flags.filter((f) => f.severity !== "info" && !f.resolution);
+  const unconfirmed = (s) => s.declaration.items.map((it, i) => (it.code_confirmed ? -1 : i)).filter((i) => i >= 0);
+
+  function approve(id, actor) {
+    const s = editable(id);
+    if (blocking(s).length) throw new Refused(`${blocking(s).length} flag(s) still need a recorded resolution.`);
+    if (unconfirmed(s).length) throw new Refused(`${unconfirmed(s).length} commodity code(s) have not been confirmed.`);
+    s.status = "approved";
+    s.approved_by = actor;
+    log(id, actor, "declaration_approved", { items: s.declaration.items.length, customs_value_eur: s.declaration.items.reduce((sum, it) => sum + (it.customs_value_eur || 0), 0) });
+    return s;
+  }
+
+  function decline(id, body) {
+    const s = editable(id), reason = (body.reason || "").trim();
+    if (reason.length < 10) throw new Refused("Give the reason for declining, in a sentence or more.");
+    s.status = "declined";
+    s.decline_reason = reason;
+    log(id, body.actor, "job_declined", { reason });
+    return s;
+  }
+
+  const view = (s) => ({ shipment: clone(s), blocking_flags: blocking(s).length, unconfirmed_items: unconfirmed(s), events: clone(events.get(s.id)), record_intact: true });
+
+  function handle(method, path, body) {
+    let m;
+    if (path === "/api/config") return { reading_configured: false, benchmarks_are_sample: true };
+    if (path === "/api/sample") return view(open(body.actor));
+    if (path === "/api/shipments" && method === "GET")
+      return [...shipments.values()].reverse().map((s) => ({ id: s.id, created_at: s.created_at, status: s.status, importer: s.declaration.importer.name,
+        exporter: s.declaration.exporter.name, invoice_number: s.declaration.invoice_number, items: s.declaration.items.length, blocking_flags: blocking(s).length }));
+    if ((m = path.match(/^\/api\/shipments\/([\w-]+)$/))) {
+      if (method === "PATCH") return view(edit(m[1], body));
+      if (!shipments.has(m[1])) throw new Refused("Shipment not found.");
+      return view(shipments.get(m[1]));
+    }
+    if ((m = path.match(/^\/api\/shipments\/([\w-]+)\/items\/(\d+)\/confirm$/))) return view(confirm(m[1], Number(m[2]), body.actor));
+    if ((m = path.match(/^\/api\/shipments\/([\w-]+)\/flags\/([^/]+)\/resolve$/))) return view(resolve(m[1], decodeURIComponent(m[2]), body));
+    if ((m = path.match(/^\/api\/shipments\/([\w-]+)\/approve$/))) return view(approve(m[1], body.actor));
+    if ((m = path.match(/^\/api\/shipments\/([\w-]+)\/decline$/))) return view(decline(m[1], body));
+    throw new Refused("Not available in the demo.");
+  }
+
+  window.fetch = async function (path, options) {
+    options = options || {};
+    try {
+      const body = typeof options.body === "string" ? JSON.parse(options.body) : {};
+      return new Response(JSON.stringify(handle(options.method || "GET", path, body)), { status: 200, headers: { "Content-Type": "application/json" } });
+    } catch (error) {
+      if (!(error instanceof Refused)) throw error;
+      return new Response(JSON.stringify({ detail: error.message }), { status: 409, headers: { "Content-Type": "application/json" } });
+    }
+  };
+
+  open("Demo declarant", "demo");
+})();
+
+</script>
+<script>
+"use strict";
+
+const app = document.getElementById("app");
+const actorInput = document.getElementById("actor");
+const toastEl = document.getElementById("toast");
+
+const RESOLUTIONS = {
+  importer_confirmed: "Importer confirmed, with proof",
+  corrected: "Corrected in the declaration",
+  guarantee_taken: "Guarantee taken",
+  not_applicable: "Checked: not a problem",
+};
+const EVENTS = {
+  shipment_opened: "Shipment opened",
+  document_received: "Document received",
+  documents_read: "Documents read",
+  code_proposed: "Code proposed",
+  code_confirmed: "Code confirmed",
+  field_changed: "Field changed",
+  flag_raised: "Flag raised",
+  flag_cleared: "Flag cleared",
+  flag_resolved: "Flag resolved",
+  declaration_approved: "Declaration approved",
+  job_declined: "Job declined",
+};
+const CODE_SOURCES = {
+  suggested: "Suggested",
+  history: "From your earlier declarations",
+  document: "From the supplier's document",
+  declarant: "Entered by declarant",
+};
+
+// ---- helpers ---------------------------------------------------------------
+
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (value === null || value === undefined || value === false) continue;
+    if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
+    else if (key === "class") el.className = value;
+    else if (key in el && key !== "list") el[key] = value;
+    else el.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child === null || child === undefined || child === false) continue;
+    el.append(child.nodeType ? child : document.createTextNode(String(child)));
+  }
+  return el;
+}
+
+function toast(message) {
+  toastEl.textContent = message;
+  toastEl.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (toastEl.hidden = true), 5000);
+}
+
+function actor() {
+  const name = actorInput.value.trim();
+  if (name.length < 2) {
+    actorInput.focus();
+    throw new Error("Enter your name first. Every action is recorded against it.");
+  }
+  return name;
+}
+
+async function api(method, path, body) {
+  const options = { method, headers: {} };
+  if (body instanceof FormData) options.body = body;
+  else if (body) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(path, options);
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const data = await response.json();
+      detail = typeof data.detail === "string" ? data.detail : "The request was not valid.";
+    } catch (_) {}
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+async function run(action) {
+  try {
+    return await action();
+  } catch (error) {
+    toast(error.message);
+    return null;
+  }
+}
+
+const money = (n) => (n === null || n === undefined ? "—" : n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const when = (iso) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
+function chip(text, kind) {
+  return h("span", { class: "chip " + (kind || "") }, text);
+}
+
+// The hosted demo page cannot use path-style hashes, so it routes in memory.
+let demoRoute = "#/s/demo";
+function go(hash) {
+  if (window.DEMO) { demoRoute = hash; route(); window.scrollTo(0, 0); }
+  else location.hash = hash;
+}
+
+// ---- list ------------------------------------------------------------------
+
+async function showList() {
+  const rows = await api("GET", "/api/shipments");
+  const body = rows.length
+    ? h("div", { class: "card scroll" },
+        h("table", {},
+          h("thead", {}, h("tr", {}, ["Opened", "Importer", "Exporter", "Invoice", "Items", "Status"].map((t) => h("th", {}, t)))),
+          h("tbody", {}, rows.map((s) =>
+            h("tr", { class: "link", onclick: () => go("#/s/" + s.id) },
+              h("td", {}, when(s.created_at)),
+              h("td", {}, s.importer || "—"),
+              h("td", {}, s.exporter || "—"),
+              h("td", {}, s.invoice_number || "—"),
+              h("td", {}, s.items),
+              h("td", {}, statusChip(s)))))))
+    : h("div", { class: "card empty" }, "No shipments yet. Open one from an invoice and packing list.");
+  app.replaceChildren(
+    h("div", { class: "head" },
+      h("h1", {}, "Shipments"),
+      h("div", { class: "actions" }, h("button", { onclick: () => go("#/new") }, "New shipment"))),
+    body);
+}
+
+function statusChip(s) {
+  if (s.status === "approved") return chip("Approved", "ok");
+  if (s.status === "declined") return chip("Declined", "high");
+  return s.blocking_flags ? chip(s.blocking_flags + " to resolve", "warning") : chip("Draft");
+}
+
+// ---- new shipment ----------------------------------------------------------
+
+async function showNew() {
+  const config = await api("GET", "/api/config");
+  let files = [];
+  const list = h("ul", { class: "files" });
+  const picker = h("input", { type: "file", multiple: true, accept: ".pdf,.png,.jpg,.jpeg,.webp", onchange: () => add(picker.files) });
+  const drop = h("label", { class: "drop" }, picker,
+    h("div", {}, "Drop the invoice and packing list here, or click to choose."),
+    h("div", { class: "muted" }, "PDF, PNG or JPEG, up to 20 MB each."), list);
+  const representation = h("select", {},
+    h("option", { value: "direct" }, "Direct representation"),
+    h("option", { value: "indirect" }, "Indirect representation"));
+  const submit = h("button", { class: "primary", disabled: true, onclick: send }, "Read documents");
+
+  function add(fileList) {
+    files = files.concat(Array.from(fileList));
+    list.replaceChildren(...files.map((f) => h("li", {}, f.name)));
+    submit.disabled = !files.length || !config.reading_configured;
+  }
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer.files); });
+
+  async function send() {
+    await run(async () => {
+      const form = new FormData();
+      form.append("actor", actor());
+      form.append("representation", representation.value);
+      files.forEach((f) => form.append("files", f));
+      submit.disabled = true;
+      submit.textContent = "Reading… this can take a minute";
+      try {
+        const view = await api("POST", "/api/shipments", form);
+        go("#/s/" + view.shipment.id);
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Read documents";
+      }
+    });
+  }
+
+  async function sample() {
+    const view = await run(() => api("POST", "/api/sample", { actor: actor() }));
+    if (view) go("#/s/" + view.shipment.id);
+  }
+
+  app.replaceChildren(
+    h("div", { class: "head" }, h("h1", {}, "New shipment")),
+    h("div", { class: "card" },
+      !config.reading_configured && h("div", { class: "notice" },
+        window.DEMO
+          ? "This is a demo, so uploads are switched off. Load the sample shipment to see how review works."
+          : "Document reading is not configured on this server, so uploads are switched off. You can still load the sample shipment to see how review works."),
+      drop,
+      h("div", { class: "fields" }, h("label", { class: "field" }, h("span", {}, "Acting as"), representation)),
+      h("div", { class: "actions", style: "margin-top:16px" }, submit,
+        h("button", { onclick: sample }, "Load sample shipment"))));
+}
+
+// ---- shipment --------------------------------------------------------------
+
+async function showShipment(id) {
+  render(await api("GET", "/api/shipments/" + id));
+}
+
+function render(view) {
+  const s = view.shipment;
+  const d = s.declaration;
+  const locked = s.status !== "draft";
+  const base = "/api/shipments/" + s.id;
+
+  const act = async (method, path, body) => {
+    const next = await run(() => api(method, base + path, Object.assign({ actor: actor() }, body)));
+    if (next) render(next);
+  };
+
+  // An input that saves on change.
+  function field(label, value, patch, options) {
+    const opts = options || {};
+    let input;
+    if (opts.choices) {
+      input = h("select", { disabled: locked }, Object.entries(opts.choices).map(([v, t]) => h("option", { value: v, selected: v === value }, t)));
+    } else {
+      input = h("input", { type: opts.number ? "number" : "text", step: "any", value: value === null || value === undefined ? "" : value, readOnly: locked, placeholder: locked ? "—" : opts.placeholder || "" });
+    }
+    input.addEventListener("change", () => {
+      let v = input.value.trim();
+      if (opts.number) v = v === "" ? null : Number(v);
+      act("PATCH", "", patch(v));
+    });
+    return label === null ? input : h("label", { class: "field" }, h("span", {}, label), input);
+  }
+  const fixed = (label, value) => h("div", { class: "field static" }, h("span", {}, label), h("div", {}, value || "—"));
+
+  // -- gate
+  const openFlags = view.blocking_flags;
+  const unconfirmed = view.unconfirmed_items.length;
+  let gate;
+  if (s.status === "approved") gate = h("div", { class: "gate approved" }, "Approved by " + s.approved_by + " — the declaration is locked.");
+  else if (s.status === "declined") gate = h("div", { class: "gate declined" }, "Job declined: " + s.decline_reason);
+  else if (!openFlags && !unconfirmed) gate = h("div", { class: "gate ready" }, "Everything is resolved and confirmed. Ready for your approval.");
+  else gate = h("div", { class: "gate" }, "Before you can approve: " + [
+    openFlags && openFlags + (openFlags === 1 ? " flag needs" : " flags need") + " a recorded resolution",
+    unconfirmed && unconfirmed + (unconfirmed === 1 ? " commodity code needs" : " commodity codes need") + " confirming",
+  ].filter(Boolean).join(" · "));
+
+  // -- parties and terms
+  const terms = h("div", { class: "card" },
+    h("h2", {}, "Parties and terms"),
+    h("div", { class: "fields" },
+      fixed("Importer", d.importer.name),
+      field("Importer VAT number", d.importer.vat_number, (v) => ({ importer: { vat_number: v } })),
+      field("Importer EORI", d.importer.eori, (v) => ({ importer: { eori: v } }), { placeholder: "GR…" }),
+      fixed("Exporter", [d.exporter.name, d.exporter.country].filter(Boolean).join(", ")),
+      fixed("Invoice", [d.invoice_number, d.invoice_date].filter(Boolean).join(" · ")),
+      fixed("Invoice total", money(d.invoice_total) + " " + d.currency),
+      field("Currency", d.currency, (v) => ({ header: { currency: v } })),
+      field("Exchange rate (" + (d.currency || "currency") + " per €1)", d.exchange_rate, (v) => ({ header: { exchange_rate: v } }), { number: true, placeholder: d.currency === "EUR" ? "not needed" : "required" }),
+      field("Delivery terms", d.incoterm, (v) => ({ header: { incoterm: v } })),
+      field("Freight (" + (d.currency || "invoice currency") + ")", d.freight, (v) => ({ header: { freight: v } }), { number: true }),
+      field("Insurance (" + (d.currency || "invoice currency") + ")", d.insurance, (v) => ({ header: { insurance: v } }), { number: true }),
+      field("Acting as", d.representation, (v) => ({ header: { representation: v } }), { choices: { direct: "Direct representative", indirect: "Indirect representative" } })));
+
+  // -- items
+  const lowItems = new Set(s.flags.filter((f) => f.check.startsWith("value_below")).map((f) => f.item_index));
+  const itemRows = d.items.map((it, i) => {
+    const perKg = it.customs_value_eur && it.net_kg ? it.customs_value_eur / it.net_kg : null;
+    const patch = (name) => (v) => ({ items: { [i]: { [name]: v } } });
+    const confidence = it.code_confidence && chip(it.code_confidence + " confidence", it.code_confidence === "low" ? "high" : it.code_confidence === "medium" ? "warning" : "ok");
+    return h("tr", {},
+      h("td", { class: "idx" }, i + 1),
+      h("td", { class: "goods" }, it.description,
+        h("div", { class: "muted" }, it.quantity.toLocaleString("en-GB") + " " + it.unit + " · " + it.packages + " " + it.package_type.toLowerCase())),
+      h("td", { class: "code", "data-label": "Commodity code" },
+        field(null, it.commodity_code, patch("commodity_code")),
+        h("div", { style: "margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center" },
+          it.code_confirmed ? chip("Confirmed", "ok")
+            : !locked && h("button", { class: "small", disabled: it.commodity_code.length !== 10, onclick: () => act("POST", "/items/" + i + "/confirm") }, "Confirm code"),
+          confidence),
+        h("div", { class: "reason" },
+          h("strong", {}, (CODE_SOURCES[it.code_source] || "No code yet") + ". "), it.code_reasoning,
+          it.code_alternatives.length ? " Alternatives: " + it.code_alternatives.join(", ") + "." : "")),
+      h("td", { class: "origin", "data-label": "Origin" }, field(null, it.origin_country, patch("origin_country"))),
+      h("td", { class: "num weight", "data-label": "Net kg" }, field(null, it.net_kg, patch("net_kg"), { number: true })),
+      h("td", { class: "num", "data-label": "Invoice " + d.currency }, money(it.invoice_value)),
+      h("td", { class: "num", "data-label": "Customs value €" }, money(it.customs_value_eur)),
+      h("td", { class: "num " + (lowItems.has(i) ? "below" : ""), "data-label": "€ per kg" }, perKg === null ? "—" : money(perKg)));
+  });
+  const items = h("div", { class: "card scroll" },
+    h("h2", {}, "Items"),
+    h("table", { class: "items" },
+      h("thead", {}, h("tr", {},
+        h("th", {}, "#"), h("th", {}, "Goods"), h("th", {}, "Commodity code"), h("th", {}, "Origin"),
+        h("th", { class: "num" }, "Net kg"), h("th", { class: "num" }, "Invoice " + d.currency),
+        h("th", { class: "num" }, "Customs value €"), h("th", { class: "num" }, "€ per kg"))),
+      h("tbody", {}, itemRows)));
+
+  // -- flags
+  const order = { high: 0, warning: 1, info: 2 };
+  const sorted = s.flags.slice().sort((a, b) => (!!a.resolution - !!b.resolution) || order[a.severity] - order[b.severity]);
+  const flagEls = sorted.map((f) => {
+    const where = f.item_index === null ? "" : "Item " + (f.item_index + 1);
+    const label = f.severity === "high" ? "High" : f.severity === "warning" ? "To resolve" : "Note";
+    let footer = null;
+    if (f.resolution) {
+      footer = h("div", { class: "done" }, chip("Resolved", "ok"), " ", RESOLUTIONS[f.resolution] + " — " + f.resolution_note, h("span", { class: "muted" }, " (" + f.resolved_by + ")"));
+    } else if (f.severity !== "info" && !locked) {
+      const choice = h("select", { "aria-label": "How it was dealt with" }, Object.entries(RESOLUTIONS).map(([v, t]) => h("option", { value: v }, t)));
+      const note = h("textarea", { placeholder: "What you checked or received, e.g. “Importer sent bank transfer of 12 Oct matching the invoice.”", "aria-label": "Note" });
+      footer = h("form", { onsubmit: (e) => { e.preventDefault(); act("POST", "/flags/" + encodeURIComponent(f.id) + "/resolve", { resolution: choice.value, note: note.value }); } },
+        choice, note, h("button", {}, "Record"));
+    }
+    return h("div", { class: "flag" },
+      h("div", { class: "title" }, chip(label, f.resolution ? "" : f.severity), f.title, where && h("span", { class: "muted" }, where)),
+      h("p", { class: "detail" }, f.detail),
+      footer);
+  });
+  const flags = h("div", { class: "card" },
+    h("h2", {}, "Checks"),
+    flagEls.length ? flagEls : h("p", { class: "muted" }, "No flags were raised."));
+
+  // -- record
+  const describe = (e) => {
+    const p = e.payload;
+    switch (e.type) {
+      case "field_changed": return p.field + ": " + (p.old === null || p.old === "" ? "empty" : p.old) + " → " + (p.new === null || p.new === "" ? "empty" : p.new);
+      case "flag_raised": return p.title;
+      case "flag_cleared": return p.title;
+      case "flag_resolved": return p.title + " — " + (RESOLUTIONS[p.resolution] || p.resolution) + ": " + p.note;
+      case "code_proposed": return "Item " + (p.item + 1) + ": " + p.code + " (" + (CODE_SOURCES[p.source] || p.source).toLowerCase() + ")";
+      case "code_confirmed": return "Item " + (p.item + 1) + ": " + p.code;
+      case "document_received": return p.filename + " · sha256 " + p.sha256.slice(0, 12) + "…";
+      case "documents_read": return "Invoice " + p.invoice_number + ", " + p.lines + " lines, " + money(p.declared_total) + " " + p.currency
+        + (p.reread_because ? ". Read a second time by the stronger model because: " + p.reread_because.join("; ") + "." : "");
+      case "declaration_approved": return p.items + " items, customs value € " + money(p.customs_value_eur);
+      case "job_declined": return p.reason;
+      case "shipment_opened": return "Acting as " + p.representation + " representative";
+      default: return "";
+    }
+  };
+  const record = h("div", { class: "card" },
+    h("h2", {}, "Record"),
+    h("p", { class: "muted" }, view.record_intact
+      ? "Every action on this shipment is logged below. The log verifies: no entry has been altered or removed."
+      : "Warning: the log does not verify. An entry has been altered or removed."),
+    h("ul", { class: "timeline" }, view.events.map((e) =>
+      h("li", {}, h("span", { class: "muted" }, when(e.at)), h("span", {}, EVENTS[e.type] || e.type, h("div", { class: "muted" }, e.actor)), h("span", {}, describe(e))))));
+
+  // -- header
+  const declineReason = h("textarea", { id: "decline-reason", placeholder: "Reason for declining this job. It is recorded in the file.", "aria-label": "Reason for declining" });
+  const declineForm = h("form", { class: "card decline", hidden: true, onsubmit: (e) => { e.preventDefault(); act("POST", "/decline", { reason: declineReason.value }); } },
+    h("h2", {}, "Decline this job"), declineReason,
+    h("div", { class: "actions" },
+      h("button", { class: "danger" }, "Decline and lock"),
+      h("button", { type: "button", onclick: () => (declineForm.hidden = true) }, "Cancel")));
+  const decline = () => { declineForm.hidden = false; declineReason.focus(); };
+  const actions = h("div", { class: "actions" },
+    h("button", { onclick: () => go("#/") }, "All shipments"),
+    !window.DEMO && h("a", { class: "button", href: base + "/record.pdf" }, "Download record (PDF)"),
+    !window.DEMO && s.status === "approved" && h("a", { class: "button", href: base + "/declaration.json" }, "Export declaration"),
+    !locked && h("button", { class: "danger", onclick: decline }, "Decline job"),
+    !locked && h("button", { class: "primary", disabled: !!(openFlags || unconfirmed), onclick: () => act("POST", "/approve") }, "Approve declaration"));
+
+  const focused = document.activeElement && document.activeElement.closest("main") ? window.scrollY : null;
+  app.replaceChildren(
+    h("div", { class: "head" },
+      h("div", {},
+        h("h1", {}, (d.importer.name || "Unknown importer") + " ← " + (d.exporter.name || "unknown exporter")),
+        h("div", { class: "sub" }, "Invoice " + (d.invoice_number || "—") + " · opened " + when(s.created_at))),
+      actions),
+    declineForm, gate, terms, items, flags, record);
+  if (focused !== null) window.scrollTo(0, focused);
+}
+
+// ---- routing ---------------------------------------------------------------
+
+async function route() {
+  const hash = window.DEMO ? demoRoute : location.hash || "#/";
+  const match = hash.match(/^#\/s\/([\w-]+)$/);
+  try {
+    if (match) await showShipment(match[1]);
+    else if (hash === "#/new") await showNew();
+    else await showList();
+  } catch (error) {
+    app.replaceChildren(h("div", { class: "card empty" }, error.message));
+  }
+}
+
+try { actorInput.value = localStorage.getItem("declarant") || actorInput.value; } catch (_) {}
+actorInput.addEventListener("change", () => { try { localStorage.setItem("declarant", actorInput.value.trim()); } catch (_) {} });
+window.addEventListener("hashchange", route);
+route();
+
+</script>

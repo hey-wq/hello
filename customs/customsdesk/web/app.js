@@ -99,6 +99,13 @@ function chip(text, kind) {
   return h("span", { class: "chip " + (kind || "") }, text);
 }
 
+// The hosted demo page cannot use path-style hashes, so it routes in memory.
+let demoRoute = "#/s/demo";
+function go(hash) {
+  if (window.DEMO) { demoRoute = hash; route(); window.scrollTo(0, 0); }
+  else location.hash = hash;
+}
+
 // ---- list ------------------------------------------------------------------
 
 async function showList() {
@@ -108,7 +115,7 @@ async function showList() {
         h("table", {},
           h("thead", {}, h("tr", {}, ["Opened", "Importer", "Exporter", "Invoice", "Items", "Status"].map((t) => h("th", {}, t)))),
           h("tbody", {}, rows.map((s) =>
-            h("tr", { class: "link", onclick: () => (location.hash = "#/s/" + s.id) },
+            h("tr", { class: "link", onclick: () => go("#/s/" + s.id) },
               h("td", {}, when(s.created_at)),
               h("td", {}, s.importer || "—"),
               h("td", {}, s.exporter || "—"),
@@ -119,7 +126,7 @@ async function showList() {
   app.replaceChildren(
     h("div", { class: "head" },
       h("h1", {}, "Shipments"),
-      h("div", { class: "actions" }, h("a", { class: "button", href: "#/new" }, "New shipment"))),
+      h("div", { class: "actions" }, h("button", { onclick: () => go("#/new") }, "New shipment"))),
     body);
 }
 
@@ -163,7 +170,7 @@ async function showNew() {
       submit.textContent = "Reading… this can take a minute";
       try {
         const view = await api("POST", "/api/shipments", form);
-        location.hash = "#/s/" + view.shipment.id;
+        go("#/s/" + view.shipment.id);
       } finally {
         submit.disabled = false;
         submit.textContent = "Read documents";
@@ -173,14 +180,16 @@ async function showNew() {
 
   async function sample() {
     const view = await run(() => api("POST", "/api/sample", { actor: actor() }));
-    if (view) location.hash = "#/s/" + view.shipment.id;
+    if (view) go("#/s/" + view.shipment.id);
   }
 
   app.replaceChildren(
     h("div", { class: "head" }, h("h1", {}, "New shipment")),
     h("div", { class: "card" },
       !config.reading_configured && h("div", { class: "notice" },
-        "Document reading is not configured on this server, so uploads are switched off. You can still load the sample shipment to see how review works."),
+        window.DEMO
+          ? "This is a demo, so uploads are switched off. Load the sample shipment to see how review works."
+          : "Document reading is not configured on this server, so uploads are switched off. You can still load the sample shipment to see how review works."),
       drop,
       h("div", { class: "fields" }, h("label", { class: "field" }, h("span", {}, "Acting as"), representation)),
       h("div", { class: "actions", style: "margin-top:16px" }, submit,
@@ -258,10 +267,10 @@ function render(view) {
     const patch = (name) => (v) => ({ items: { [i]: { [name]: v } } });
     const confidence = it.code_confidence && chip(it.code_confidence + " confidence", it.code_confidence === "low" ? "high" : it.code_confidence === "medium" ? "warning" : "ok");
     return h("tr", {},
-      h("td", {}, i + 1),
-      h("td", {}, it.description,
+      h("td", { class: "idx" }, i + 1),
+      h("td", { class: "goods" }, it.description,
         h("div", { class: "muted" }, it.quantity.toLocaleString("en-GB") + " " + it.unit + " · " + it.packages + " " + it.package_type.toLowerCase())),
-      h("td", { class: "code" },
+      h("td", { class: "code", "data-label": "Commodity code" },
         field(null, it.commodity_code, patch("commodity_code")),
         h("div", { style: "margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center" },
           it.code_confirmed ? chip("Confirmed", "ok")
@@ -270,15 +279,15 @@ function render(view) {
         h("div", { class: "reason" },
           h("strong", {}, (CODE_SOURCES[it.code_source] || "No code yet") + ". "), it.code_reasoning,
           it.code_alternatives.length ? " Alternatives: " + it.code_alternatives.join(", ") + "." : "")),
-      h("td", { class: "origin" }, field(null, it.origin_country, patch("origin_country"))),
-      h("td", { class: "num weight" }, field(null, it.net_kg, patch("net_kg"), { number: true })),
-      h("td", { class: "num" }, money(it.invoice_value)),
-      h("td", { class: "num" }, money(it.customs_value_eur)),
-      h("td", { class: "num " + (lowItems.has(i) ? "below" : "") }, perKg === null ? "—" : money(perKg)));
+      h("td", { class: "origin", "data-label": "Origin" }, field(null, it.origin_country, patch("origin_country"))),
+      h("td", { class: "num weight", "data-label": "Net kg" }, field(null, it.net_kg, patch("net_kg"), { number: true })),
+      h("td", { class: "num", "data-label": "Invoice " + d.currency }, money(it.invoice_value)),
+      h("td", { class: "num", "data-label": "Customs value €" }, money(it.customs_value_eur)),
+      h("td", { class: "num " + (lowItems.has(i) ? "below" : ""), "data-label": "€ per kg" }, perKg === null ? "—" : money(perKg)));
   });
   const items = h("div", { class: "card scroll" },
     h("h2", {}, "Items"),
-    h("table", {},
+    h("table", { class: "items" },
       h("thead", {}, h("tr", {},
         h("th", {}, "#"), h("th", {}, "Goods"), h("th", {}, "Commodity code"), h("th", {}, "Origin"),
         h("th", { class: "num" }, "Net kg"), h("th", { class: "num" }, "Invoice " + d.currency),
@@ -337,13 +346,17 @@ function render(view) {
       h("li", {}, h("span", { class: "muted" }, when(e.at)), h("span", {}, EVENTS[e.type] || e.type, h("div", { class: "muted" }, e.actor)), h("span", {}, describe(e))))));
 
   // -- header
-  const decline = () => {
-    const reason = window.prompt("Reason for declining this job (recorded in the file):");
-    if (reason !== null) act("POST", "/decline", { reason });
-  };
+  const declineReason = h("textarea", { id: "decline-reason", placeholder: "Reason for declining this job. It is recorded in the file.", "aria-label": "Reason for declining" });
+  const declineForm = h("form", { class: "card decline", hidden: true, onsubmit: (e) => { e.preventDefault(); act("POST", "/decline", { reason: declineReason.value }); } },
+    h("h2", {}, "Decline this job"), declineReason,
+    h("div", { class: "actions" },
+      h("button", { class: "danger" }, "Decline and lock"),
+      h("button", { type: "button", onclick: () => (declineForm.hidden = true) }, "Cancel")));
+  const decline = () => { declineForm.hidden = false; declineReason.focus(); };
   const actions = h("div", { class: "actions" },
-    h("a", { class: "button", href: base + "/record.pdf" }, "Download record (PDF)"),
-    s.status === "approved" && h("a", { class: "button", href: base + "/declaration.json" }, "Export declaration"),
+    h("button", { onclick: () => go("#/") }, "All shipments"),
+    !window.DEMO && h("a", { class: "button", href: base + "/record.pdf" }, "Download record (PDF)"),
+    !window.DEMO && s.status === "approved" && h("a", { class: "button", href: base + "/declaration.json" }, "Export declaration"),
     !locked && h("button", { class: "danger", onclick: decline }, "Decline job"),
     !locked && h("button", { class: "primary", disabled: !!(openFlags || unconfirmed), onclick: () => act("POST", "/approve") }, "Approve declaration"));
 
@@ -354,14 +367,14 @@ function render(view) {
         h("h1", {}, (d.importer.name || "Unknown importer") + " ← " + (d.exporter.name || "unknown exporter")),
         h("div", { class: "sub" }, "Invoice " + (d.invoice_number || "—") + " · opened " + when(s.created_at))),
       actions),
-    gate, terms, items, flags, record);
+    declineForm, gate, terms, items, flags, record);
   if (focused !== null) window.scrollTo(0, focused);
 }
 
 // ---- routing ---------------------------------------------------------------
 
 async function route() {
-  const hash = location.hash || "#/";
+  const hash = window.DEMO ? demoRoute : location.hash || "#/";
   const match = hash.match(/^#\/s\/([\w-]+)$/);
   try {
     if (match) await showShipment(match[1]);
@@ -372,7 +385,7 @@ async function route() {
   }
 }
 
-try { actorInput.value = localStorage.getItem("declarant") || ""; } catch (_) {}
+try { actorInput.value = localStorage.getItem("declarant") || actorInput.value; } catch (_) {}
 actorInput.addEventListener("change", () => { try { localStorage.setItem("declarant", actorInput.value.trim()); } catch (_) {} });
 window.addEventListener("hashchange", route);
 route();

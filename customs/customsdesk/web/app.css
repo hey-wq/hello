@@ -17,7 +17,8 @@
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #121317;
     --surface: #1b1d23;
     --ink: #eceef2;
@@ -33,6 +34,13 @@
     --high-bg: #42201d;
     --info-bg: #262931;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121317; --surface: #1b1d23; --ink: #eceef2; --muted: #9aa1ae; --line: #2d3039;
+  --accent: #7ea2ff; --accent-ink: #0c1020; --ok: #6fd3a0; --ok-bg: #173327;
+  --warn: #f0c060; --warn-bg: #3a2e12; --high: #ff9a90; --high-bg: #42201d; --info-bg: #262931;
 }
 
 * { box-sizing: border-box; }
@@ -52,14 +60,22 @@ a { color: var(--accent); }
 
 .bar {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 5;
+  padding-block: 12px; background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
 }
 .brand { font-weight: 700; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
 .who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
-.who input { width: 180px; }
+.who input { width: 180px; max-width: 42vw; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
 
-main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+main {
+  max-width: 1180px; margin: 0 auto; padding-block: 28px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1 { text-wrap: balance; }
+.decline textarea { margin-bottom: 12px; }
+.demo-note { background: var(--info-bg); color: var(--muted); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
 .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .head .sub { color: var(--muted); margin-top: 4px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -131,4 +147,25 @@ td.weight input { width: 92px; text-align: right; }
 .notice { background: var(--info-bg); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; color: var(--muted); }
 .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
 
-#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; max-width: min(560px, 92vw); z-index: 10; }
+/* Phone: each item becomes a stacked block with labelled rows. */
+@media (max-width: 720px) {
+  .card { padding: 16px; }
+  table.items thead { display: none; }
+  table.items, table.items tbody, table.items tr, table.items td { display: block; width: 100%; }
+  table.items tr { border-top: 1px solid var(--line); padding: 14px 0; }
+  table.items tr:first-child { border-top: 0; padding-top: 0; }
+  table.items td { border: 0; padding: 4px 0; text-align: left; }
+  table.items td.idx { display: none; }
+  table.items td.goods { font-weight: 600; }
+  table.items td.goods .muted { font-weight: 400; }
+  table.items td[data-label] { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; align-items: start; }
+  table.items td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 12px; padding-top: 2px; }
+  table.items td.code { display: block; }
+  table.items td.code::before { display: block; margin-bottom: 4px; }
+  table.items td.code input { width: 100%; max-width: 220px; }
+  table.items td.weight input { text-align: left; }
+  .reason { max-width: none; }
+  .fields { grid-template-columns: 1fr 1fr; }
+}
+
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; max-width: min(560px, 92vw); z-index: 10; }

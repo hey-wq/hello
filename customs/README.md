@@ -58,6 +58,14 @@ Set both model variables to the same value to switch the second reading off.
 
 Tests: `python -m pytest`
 
+## Demo page
+
+`python demo/build.py` writes `demo/customs-desk-demo.html`: the real review
+screen in a single file, with `demo/backend.js` standing in for the server and
+the sample shipment loaded. It needs no server, saves nothing, and works on a
+phone. `python demo/parity.py` checks that the stand-in agrees with the real
+server; run it after changing the checks.
+
 ## Before using it on real shipments
 
 - **Reference values are placeholders.** `data/benchmarks_sample.csv` holds
